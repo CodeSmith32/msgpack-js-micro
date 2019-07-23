@@ -3,7 +3,7 @@
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
-this.msgpack = (function(window){
+(function(window){
 	'use strict';
 	var t = {};
 
@@ -443,6 +443,8 @@ this.msgpack = (function(window){
 		return obj;
 	}
 
-	if(typeof window.module === "object" && typeof window.module.exports === "object") module.exports = t;
-	return t;
+	if(typeof module === "object" && typeof module.exports === "object")
+		module.exports = t;
+	else
+		window.msgpack = t;
 })(this);
