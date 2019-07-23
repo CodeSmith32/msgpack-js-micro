@@ -67,7 +67,7 @@ msgpack: {
     // Whether to decode the msgpack binary types
     // as ArrayBuffers
     binsAsBuffers?: boolean = false
-  ),
+  ): *,
   
   extend(extensionObject: {
     // The code for the msgpack extension (0 to 127)
