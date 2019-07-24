@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.0.0
+/// version 1.0.1
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -8,18 +8,26 @@
 	var t = {};
 
 	// if not supported, just a blank class
-	var Uint8Array = window.Uint8Array || function(){},
+	var typedArrays = typeof window.Uint8Array==="function" && typeof window.ArrayBuffer==="function",
+		nodeBuffers = typeof window.Buffer==="function",
+		Uint8Array = window.Uint8Array || function(){},
 		ArrayBuffer = window.ArrayBuffer || function(){},
+		DataView = window.DataView || function(){},
+		Buffer = window.Buffer || function(){},
 		bis = window.BigInt ? {bits: window.BigInt(32), mask: window.BigInt(0xffffffff)} : {};
 
 	function normalizeString(buf) {
 		if(typeof buf=="string")
 			return buf;
+		if(nodeBuffers && buf instanceof Buffer)
+			return buf.toString('latin1');
 		if(buf && buf.constructor && !(buf instanceof Uint8Array)
 			&& buf.constructor.name.match(/^(Big)?(Uint|Int|Float)(8|16|32|64)(Clamped)?Array$/))
 			buf = new Uint8Array(buf.buffer,buf.byteOffset,buf.byteLength);
 		if(buf instanceof ArrayBuffer)
 			buf = new Uint8Array(buf);
+		if(buf instanceof DataView)
+			buf = new Uint8Array(buf.buffer);
 		if(buf instanceof Uint8Array) {
 			var s="";
 			for(var i=0;i<buf.length;i+=128)
@@ -29,10 +37,22 @@
 		throw new Error("MsgPack Error: Cannot normalize to string for value of type "+(typeof buf)+(buf ? " "+buf.constructor.name : ""));
 	}
 	function toBuffer(str) {
+		if(!typedArrays) throw new Error("MsgPack Error: Requesting ArrayBuffer return in environment that doesn't support TypedArrays or ArrayBuffers");
 		var ar = new Uint8Array(str.length);
 		for(var i=0;i<str.length;i++)
 			ar[i] = str.charCodeAt(i);
-		return ar;
+		return ar.buffer;
+	}
+	function toRequestedType(str,type) {
+		switch(type) {
+			case "buffer":
+				if(nodeBuffers)
+					return Buffer.from(str,'latin1');
+				// fall through
+			case "arraybuffer":
+				return toBuffer(str);
+		}
+		return str;
 	}
 	var log = Math.log,
 		lg2 = log(2),
@@ -75,6 +95,11 @@
 			if(a) return String.fromCharCode((c1&31)<<6 | (c2&63));
 			if(b) return String.fromCharCode((c1&15)<<12 | (c2&63)<<6 | (c3&63));
 			if(c) return String.fromCharCode((c1&7)<<18 | (c2&63)<<12 | (c3&63)<<6 | (c4&63));
+		});
+	}
+	function truncBufferString(str) {
+		return str.replace(/[\u0100-\uffff]/g,function(m){
+			return String.fromCharCode(m.charCodeAt(0)&255);
 		});
 	}
 
@@ -224,8 +249,12 @@
 		extTypes[type] = ext;
 	}
 
-	t.encode = function(obj,asBuf/*=false*/) {
-		asBuf = !!asBuf;
+	t.encode = function(obj,settings) {
+		settings = settings || {};
+		// returnType: "string" | "buffer" | "arraybuffer"
+		var rettype = "returnType" in settings ? settings.returnType.toLowerCase() : "string";
+		// stringEncoding: "utf8" | "latin1"
+		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : "utf8";
 		var data = new BinWriter();
 
 		var iterated = [];
@@ -237,8 +266,9 @@
 					ext = exts[tp][i];
 					buf = ext.enc(o);
 					if(buf === false) continue;
-					if(typeof buf !== "string")
-						throw new Error("MsgPack Error: Extension code "+ext.ty+" failed to return a string");
+					if(buf === undefined || buf === null)
+						throw new Error("MsgPack Error: Extension code "+ext.ty+" failed to return a valid buffer");
+					buf = normalizeString(buf);
 
 					if(buf.length === 1) data.i8(0xd4);
 					else if(buf.length === 2) data.i8(0xd5);
@@ -255,7 +285,7 @@
 			if(tp === "bigint" && o <= 0xffffffff) {
 				o = Number(o); tp = "number";
 			}
-			if(o && o.constructor.name.match(/^(Big)?(Uint|Int|Float)(8|16|32|64)(Clamped)?Array$|^(ArrayBuffer|DataView)$/)) {
+			if(o && o.constructor.name.match(/^(Big)?(Uint|Int|Float)(8|16|32|64)(Clamped)?Array$|^(ArrayBuffer|Buffer|DataView)$/)) {
 				// buffer
 				o = normalizeString(o);
 				if(o.length < 256)
@@ -264,7 +294,7 @@
 					data.i8(0xc5).i16(o.length).buf(o);
 				else
 					data.i8(0xc6).i32(o.length).buf(o);
-			} else if(tp === null || tp === undefined) {
+			} else if(o === null || o === undefined) {
 				// nil
 				data.i8(0xc0);
 			} else if(tp === "boolean") {
@@ -309,7 +339,10 @@
 				data.i8(o < 0 ? 0xd3 : 0xcf);
 				data.i32(Number(o >> bi.bits)).i32(Number(o & bi.mask));
 			} else if(tp === "string") {
-				o = encodeUTF(o);
+				if(strenc === "utf8")
+					o = encodeUTF(o);
+				else
+					o = truncBufferString(o);
 				if(o.length < 32)
 					data.i8(0xa0 | o.length).buf(o);
 				else if(o.length < 256)
@@ -350,44 +383,47 @@
 						if(o[i] === undefined) continue;
 						encode(i);
 						encode(o[i]);
-						if(--l < 0) throw new Error("MsgPack Error: Failed to encode transforming Proxy object");
+						if(--l < 0) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
 					}
-					if(l) throw new Error("MsgPack Error: Failed to encode transforming Proxy object");
+					if(l) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
 				}
 				iterated.pop();
 			}
 		}
 		encode(obj);
 
-		if(asBuf) return toBuffer(data.data());
-		return data.data();
+		return toRequestedType(data.data(),rettype);
 	}
 
-	t.decode = function(buf,binsAsBufs/*=false*/) {
-		binsAsBufs = !!binsAsBufs;
+	t.decode = function(buf,settings) {
+		settings = settings || {};
+		// binaryType: "string" | "buffer" | "arraybuffer"
+		var bintype = "binaryType" in settings ? settings.binaryType.toLowerCase() : "string";
+		// stringEncoding: "utf8" | "latin1"
+		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : "utf8";
 		var data = new BinReader(buf);
 
-		function obj(n) {
+		function decObj(n) {
 			var o = {};
 			for(var i=0;i<n;i++)
 				o[decode()] = decode();
 			return o;
 		}
-		function arr(n) {
+		function decArr(n) {
 			var o = [];
 			for(var i=0;i<n;i++)
 				o.push(decode());
 			return o;
 		}
-		function bin(buf) {
-			if(!binsAsBufs) return buf;
-
-			var o = new Uint8Array(buf.length);
-			for(var i=0;i<buf.length;i++)
-				o[i] = buf.charCodeAt(i);
-			return o.buffer;
+		function decBin(buf) {
+			return toRequestedType(buf,bintype);
 		}
-		function ext(type,buf) {
+		function decStr(str) {
+			if(strenc === "utf8")
+				return decodeUTF(str);
+			return str;
+		}
+		function decExt(type,buf) {
 			if(!(type in extTypes)) {
 				console.warn("MsgPack Warning: Failed to decode unregistered extension type "+type);
 				return null;
@@ -398,20 +434,20 @@
 			var b = data.ui8(), l;
 			if((b&0x80) === 0) return b; // +fixint
 			if((b&0xe0) === 0xe0) return b|(-1^255); // -fixint
-			if((b&0xf0) === 0x80) return obj(b&15); // fixmap
-			if((b&0xf0) === 0x90) return arr(b&15); // fixarray
-			if((b&0xe0) === 0xa0) return decodeUTF(data.buf(b&31)); // fixstr
+			if((b&0xf0) === 0x80) return decObj(b&15); // fixmap
+			if((b&0xf0) === 0x90) return decArr(b&15); // fixarray
+			if((b&0xe0) === 0xa0) return decStr(data.buf(b&31)); // fixstr
 			switch(b) {
 				case 0xc1: // ehh.. just map it to nil
 				case 0xc0: return null; // nil
 				case 0xc2: return false; // false
 				case 0xc3: return true; // true
-				case 0xc4: return bin(data.buf(data.ui8())); // bin 8
-				case 0xc5: return bin(data.buf(data.ui16())); // bin 16
-				case 0xc6: return bin(data.buf(data.ui32())); // bin 32
-				case 0xc7: l = data.ui8(); return ext(data.ui8(),data.buf(l)); // ext 8
-				case 0xc8: l = data.ui16(); return ext(data.ui8(),data.buf(l)); // ext 16
-				case 0xc9: l = data.ui32(); return ext(data.ui8(),data.buf(l)); // ext 32
+				case 0xc4: return decBin(data.buf(data.ui8())); // bin 8
+				case 0xc5: return decBin(data.buf(data.ui16())); // bin 16
+				case 0xc6: return decBin(data.buf(data.ui32())); // bin 32
+				case 0xc7: l = data.ui8(); return decExt(data.ui8(),data.buf(l)); // ext 8
+				case 0xc8: l = data.ui16(); return decExt(data.ui8(),data.buf(l)); // ext 16
+				case 0xc9: l = data.ui32(); return decExt(data.ui8(),data.buf(l)); // ext 32
 				case 0xca: return data.f32(); // float 32
 				case 0xcb: return data.f64(); // float 64
 				case 0xcc: return data.ui8(); // uint 8
@@ -422,18 +458,18 @@
 				case 0xd1: return data.i16(); // int 16
 				case 0xd2: return data.i32(); // int 32
 				case 0xd3: l = data.i32()*0x100000000; return l + (l<0?-1:1)*data.ui32(); // int 64
-				case 0xd4: return ext(data.i8(),data.buf(1)); // fixext 1
-				case 0xd5: return ext(data.i8(),data.buf(2)); // fixext 2
-				case 0xd6: return ext(data.i8(),data.buf(4)); // fixext 4
-				case 0xd7: return ext(data.i8(),data.buf(8)); // fixext 8
-				case 0xd8: return ext(data.i8(),data.buf(16)); // fixext 16
-				case 0xd9: return decodeUTF(data.buf(data.ui8())); // str 8
-				case 0xda: return decodeUTF(data.buf(data.ui16())); // str 16
-				case 0xdb: return decodeUTF(data.buf(data.ui32())); // str 32
-				case 0xdc: return arr(data.ui16()); // array 16
-				case 0xdd: return arr(data.ui32()); // array 32
-				case 0xde: return obj(data.ui16()); // map 16
-				case 0xdf: return obj(data.ui32()); // map 32
+				case 0xd4: return decExt(data.i8(),data.buf(1)); // fixext 1
+				case 0xd5: return decExt(data.i8(),data.buf(2)); // fixext 2
+				case 0xd6: return decExt(data.i8(),data.buf(4)); // fixext 4
+				case 0xd7: return decExt(data.i8(),data.buf(8)); // fixext 8
+				case 0xd8: return decExt(data.i8(),data.buf(16)); // fixext 16
+				case 0xd9: return decStr(data.buf(data.ui8())); // str 8
+				case 0xda: return decStr(data.buf(data.ui16())); // str 16
+				case 0xdb: return decStr(data.buf(data.ui32())); // str 32
+				case 0xdc: return decArr(data.ui16()); // array 16
+				case 0xdd: return decArr(data.ui32()); // array 32
+				case 0xde: return decObj(data.ui16()); // map 16
+				case 0xdf: return decObj(data.ui32()); // map 32
 			}
 			throw new Error("MsgPack Error: Somehow encountered unknown byte code: "+b);
 		}

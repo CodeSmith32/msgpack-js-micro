@@ -10,7 +10,7 @@ This is a very quick and extremely small Javascript implementation of msgpack, f
 <script type="text/javascript">
 var obj = {
   "hello": "world",
-  utf8: "\udead\ubeef", // strings are utf8-encoded
+  utf8: "\udead\ubeef", // strings are utf8-encoded by default
   37: 79.995,
   ar: [1, 2, 3],
   buffer: Uint8Array([1,2,3]), // uses msgpack's binary format
@@ -31,7 +31,7 @@ const msgpack = require("./msgpack.min.js");
 
 var obj = {
   "hello": "world",
-  utf8: "\udead\ubeef", // strings are utf8-encoded
+  utf8: "\udead\ubeef", // strings are utf8-encoded by default
   37: 79.995,
   ar: [1, 2, 3],
   buffer: Uint8Array([1,2,3]), // uses msgpack's binary format
@@ -46,64 +46,86 @@ console.log(decoded);
 
 ## General Reference:
 
-```
-msgpack: {
-  // Encode an object in the msgpack format
-  encode(
-    // The data to encode
-    data: *,
-    
-    // If the generated content should be returned as an
-    // ArrayBuffer; otherwise returned as a string
-    asBuffer?:boolean = false
-  ): string | ArrayBuffer,
 
-  // Decode a msgpack-formatted string / ArrayBuffer /
-  // TypedArray into Javascript form
-  decode(
-    // The msgpack buffer to decode
-    buffer: string | ArrayBuffer | TypedArray,
-    
-    // Whether to decode the msgpack binary types
-    // as ArrayBuffers
-    binsAsBuffers?: boolean = false
-  ): *,
-  
-  extend(extensionObject: {
-    // The code for the msgpack extension (0 to 127)
-    type: int,
-    
-    // All values of this type (tested via 'typeof')
-    // will pass through this extension's hand. If
-    // the extension rejects it, it will instead be
-    // encoded normally.
-    varType?: string = "object",
+### msgpack.encode(data:\*, settings?:object={}): string | ArrayBuffer
 
-    // The handle function for encoding. If it
-    // returns a string, the string is used as the
-    // extension buffer data. If it returns boolean
-    // 'false', the extension rejects the data, and
-    // it will be processed by other watching
-    // extensions or ultimately be encoded normally.
-    encode: (
-      // The object to be encoded (or rejected if the
-      // extension determines it does not meet some
-      // criteria).
-      object:* 
-    ) => boolean,
-    
-    // The handle function for decoding. Accepts the
-    // buffer and returns the decoded object.
-    decode: (
-      // The buffer to be decoded
-      string:*
-    ) => *,
-  }),
-}
-```
+Encodes an object in the msgpack format
+
+#### `data: *`
+The object data to encode in msgpack-format
+
+#### `settings?: object`
+Settings to use when encoding. An object with the following properties:
+
+**`settings.returnType?: "string" | "buffer" | "arraybuffer" = "string"`**
+The datatype in which to return the msgpack encoded data.
+
+`"string"` is a regular JS string.
+`"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
+`"arraybuffer"` is an `ArrayBuffer` object.
+
+**`settings.stringEncoding?: "utf8" | "latin1" = "utf8"`**
+How strings should be encoded.
+
+`"utf8"` strings will be encoded in UTF-8 formatting
+`"latin1"` strings will be considered as char-buffers; for unicode characters, bits beyond the first 8 will be truncated
+
+----------------------------------------------------------------
+
+### msgpack.decode(buffer: string | ArrayBuffer | DataView | TypedArray | Buffer, settings?:object={}): *
+
+Decodes the msgpacked buffer and returns the decoded object.
+
+#### `buffer: string | ArrayBuffer | TypedArray | Buffer`
+The msgpack buffer of data. This can be a JS string, an `ArrayBuffer` or `DataView` object, or an instance of any `TypedArray`. It may also be a Node.js `Buffer`.
+
+#### `settings?: object`
+Settings to use when decoding. An object with the following properties:
+
+**`settings.binaryType?: "string" | "buffer" | "arraybuffer" = "string"`**
+The JS object type to which to decode binary msgpack entities.
+
+`"string"` is a regular JS string.
+`"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
+`"arraybuffer"` is an `ArrayBuffer` object.
+
+**`settings.stringEncoding?: "utf8" | "latin1" = "utf8"`**
+How strings will be decoded.
+
+`"utf8"` strings will be decoded where UTF8 sequences are found.
+`"latin1"` strings will be considered char-buffers. The returned strings will not contain unicode characters.
+
+----------------------------------------------------------------
+
+### msgpack.extend(extensionObject: object)
+
+Adds an extension format to msgpack.
+
+#### `extensionObject: object`
+The extension object properties. This object contains the follow properties, specifying how the extension integrates:
+
+**`extensionObject.type: int`**
+The code for the msgpack extension (0 to 127).
+
+**`extensionObject.varType?: string = "object"`**
+The JS value type this extension object deals with. When encoding, all JS values of this type will be passed through the extension's `encode` handler. If the `encode` handler accepts it, msgpack encodes the value in the extension's format. If the handler rejects it, it is passed to all other extension handlers of this type. If no extension handlers accept the value, it is encoded normally.
+
+**`extensionObject.encode: function`**
+The extension's `encode` handler. This handler should follow the format:
+
+`function encode(object:*): boolean   |   string | ArrayBuffer | DataView | Buffer | TypedArray`
+
+If this callback returns `false`, the extension rejects the value, and it is passed onto the next extension handlers or encoded normally.
+If this callback returns any buffer type (`string`, `ArrayBuffer`, `DataView`, `Buffer`, or any typed array), the extension accepts the value, and it is encoded in the extension format.
+
+**`extensionObject.decode: function`**
+The extension's `decode` handler. This handler should follow the format:
+
+`function decode(buffer:string): *`
+
+When the extension's type is found in the packed data, this callback will be called with the sub-buffer as a string, and is responsible to decode and return the encoded value.
+
 
 ## TODO:
-- Support for Node.js Buffers for input / output.
 - The Timestamp extension type.
-- Make UTF-encoded strings optional
 - Thoroughly test
