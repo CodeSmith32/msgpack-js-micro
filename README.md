@@ -58,17 +58,19 @@ The object data to encode in msgpack-format
 Settings to use when encoding. An object with the following properties:
 
 **`settings.returnType?: "string" | "buffer" | "arraybuffer" = "string"`**
+
 The datatype in which to return the msgpack encoded data.
 
-`"string"` is a regular JS string.
-`"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
-`"arraybuffer"` is an `ArrayBuffer` object.
+- `"string"` is a regular JS string.
+- `"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
+- `"arraybuffer"` is an `ArrayBuffer` object.
 
 **`settings.stringEncoding?: "utf8" | "latin1" = "utf8"`**
+
 How strings should be encoded.
 
-`"utf8"` strings will be encoded in UTF-8 formatting
-`"latin1"` strings will be considered as char-buffers; for unicode characters, bits beyond the first 8 will be truncated
+- `"utf8"` strings will be encoded in UTF-8 formatting
+- `"latin1"` strings will be considered as char-buffers; for unicode characters, bits beyond the first 8 will be truncated
 
 ----------------------------------------------------------------
 
@@ -83,17 +85,19 @@ The msgpack buffer of data. This can be a JS string, an `ArrayBuffer` or `DataVi
 Settings to use when decoding. An object with the following properties:
 
 **`settings.binaryType?: "string" | "buffer" | "arraybuffer" = "string"`**
+
 The JS object type to which to decode binary msgpack entities.
 
-`"string"` is a regular JS string.
-`"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
-`"arraybuffer"` is an `ArrayBuffer` object.
+- `"string"` is a regular JS string.
+- `"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
+- `"arraybuffer"` is an `ArrayBuffer` object.
 
 **`settings.stringEncoding?: "utf8" | "latin1" = "utf8"`**
+
 How strings will be decoded.
 
-`"utf8"` strings will be decoded where UTF8 sequences are found.
-`"latin1"` strings will be considered char-buffers. The returned strings will not contain unicode characters.
+- `"utf8"` strings will be decoded where UTF8 sequences are found.
+- `"latin1"` strings will be considered char-buffers. The returned strings will not contain unicode characters.
 
 ----------------------------------------------------------------
 
@@ -105,12 +109,15 @@ Adds an extension format to msgpack.
 The extension object properties. This object contains the follow properties, specifying how the extension integrates:
 
 **`extensionObject.type: int`**
+
 The code for the msgpack extension (0 to 127).
 
 **`extensionObject.varType?: string = "object"`**
+
 The JS value type this extension object deals with. When encoding, all JS values of this type will be passed through the extension's `encode` handler. If the `encode` handler accepts it, msgpack encodes the value in the extension's format. If the handler rejects it, it is passed to all other extension handlers of this type. If no extension handlers accept the value, it is encoded normally.
 
 **`extensionObject.encode: function`**
+
 The extension's `encode` handler. This handler should follow the format:
 
 `function encode(object:*): boolean   |   string | ArrayBuffer | DataView | Buffer | TypedArray`
@@ -119,6 +126,7 @@ If this callback returns `false`, the extension rejects the value, and it is pas
 If this callback returns any buffer type (`string`, `ArrayBuffer`, `DataView`, `Buffer`, or any typed array), the extension accepts the value, and it is encoded in the extension format.
 
 **`extensionObject.decode: function`**
+
 The extension's `decode` handler. This handler should follow the format:
 
 `function decode(buffer:string): *`
