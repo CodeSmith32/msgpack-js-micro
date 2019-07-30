@@ -46,18 +46,17 @@ console.log(decoded);
 
 ## General Reference:
 
+### msgpack.encode(data, settings = {})
 
-### msgpack.encode(data:\*, settings?:object={}): string | ArrayBuffer
+Encodes an object in the msgpack format. If a cyclic structure is detected, an error will be thrown.
 
-Encodes an object in the msgpack format
-
-#### `data: *`
-The object data to encode in msgpack-format
+#### `data: any`
+The object data to encode in msgpack-format.
 
 #### `settings?: object`
-Settings to use when encoding. An object with the following properties:
+Settings to use when encoding. This is an object with the following properties:
 
-**`settings.returnType?: "string" | "buffer" | "arraybuffer" = "string"`**
+**`settings.returnType?: "string" | "buffer" | "arraybuffer"`**
 
 The datatype in which to return the msgpack encoded data.
 
@@ -65,43 +64,57 @@ The datatype in which to return the msgpack encoded data.
 - `"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
 - `"arraybuffer"` is an `ArrayBuffer` object.
 
-**`settings.stringEncoding?: "utf8" | "latin1" = "utf8"`**
+Default: `"string"`
 
-How strings should be encoded.
+**`settings.stringEncoding?: "utf8" | "latin1"`**
+
+Specifies how Javascript strings should be encoded.
 
 - `"utf8"` strings will be encoded in UTF-8 formatting
 - `"latin1"` strings will be considered as char-buffers; for unicode characters, bits beyond the first 8 will be truncated
 
+Default: `"utf8"`
+
+#### Return: `string | Buffer | ArrayBuffer`
+Returns a buffer of data encoding the input object structure in the msgpack format. The type of this data will be the type selected by the `returnType` setting (which defaults to `string`).
+
 ----------------------------------------------------------------
 
-### msgpack.decode(buffer: string | ArrayBuffer | DataView | TypedArray | Buffer, settings?:object={}): *
+### msgpack.decode(buffer, settings = {})
 
 Decodes the msgpacked buffer and returns the decoded object.
 
-#### `buffer: string | ArrayBuffer | TypedArray | Buffer`
+#### `buffer: string | ArrayBuffer | DataView | TypedArray | Buffer`
 The msgpack buffer of data. This can be a JS string, an `ArrayBuffer` or `DataView` object, or an instance of any `TypedArray`. It may also be a Node.js `Buffer`.
 
 #### `settings?: object`
 Settings to use when decoding. An object with the following properties:
 
-**`settings.binaryType?: "string" | "buffer" | "arraybuffer" = "string"`**
+**`settings.binaryType?: "string" | "buffer" | "arraybuffer"`**
 
-The JS object type to which to decode binary msgpack entities.
+The JS object type to convert decoded binary msgpack entities into.
 
 - `"string"` is a regular JS string.
 - `"buffer"` is a Node.js Buffer (falls back to `"arraybuffer"` in the browser).
 - `"arraybuffer"` is an `ArrayBuffer` object.
 
-**`settings.stringEncoding?: "utf8" | "latin1" = "utf8"`**
+Default: `"string"`
 
-How strings will be decoded.
+**`settings.stringEncoding?: "utf8" | "latin1"`**
+
+Specifies how strings will be decoded.
 
 - `"utf8"` strings will be decoded where UTF8 sequences are found.
 - `"latin1"` strings will be considered char-buffers. The returned strings will not contain unicode characters.
 
+Default: `"utf8"`
+
+#### Return: `any`
+Returns the Javascript object structure decoded from the packed data.
+
 ----------------------------------------------------------------
 
-### msgpack.extend(extensionObject: object)
+### msgpack.extend(extensionObject)
 
 Adds an extension format to msgpack.
 
@@ -112,15 +125,17 @@ The extension object properties. This object contains the follow properties, spe
 
 The code for the msgpack extension (0 to 127).
 
-**`extensionObject.varType?: string = "object"`**
+**`extensionObject.varType?: string`**
 
 The JS value type this extension object deals with. When encoding, all JS values of this type will be passed through the extension's `encode` handler. If the `encode` handler accepts it, msgpack encodes the value in the extension's format. If the handler rejects it, it is passed to all other extension handlers of this type. If no extension handlers accept the value, it is encoded normally.
+
+Default: `"object"`
 
 **`extensionObject.encode: function`**
 
 The extension's `encode` handler. This handler should follow the format:
 
-`function encode(object:*): boolean   |   string | ArrayBuffer | DataView | Buffer | TypedArray`
+`function encode(object: any): boolean | string | ArrayBuffer | DataView | Buffer | TypedArray`
 
 If this callback returns `false`, the extension rejects the value, and it is passed onto the next extension handlers or encoded normally.
 If this callback returns any buffer type (`string`, `ArrayBuffer`, `DataView`, `Buffer`, or any typed array), the extension accepts the value, and it is encoded in the extension format.
@@ -129,10 +144,14 @@ If this callback returns any buffer type (`string`, `ArrayBuffer`, `DataView`, `
 
 The extension's `decode` handler. This handler should follow the format:
 
-`function decode(buffer:string): *`
+`function decode(buffer:string): any`
 
 When the extension's type is found in the packed data, this callback will be called with the sub-buffer as a string, and is responsible to decode and return the encoded value.
 
+#### Return: `void`
+The `msgpack.extend()` function returns `undefined`.
+
+----------------------------------------------------------------
 
 ## TODO:
 - The Timestamp extension type.
