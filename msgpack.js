@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.1.1
+/// version 1.1.2
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -125,7 +125,7 @@
 		t.ui32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte() >>> 0}
 		t.i32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte() >> 0}
 		t.ui64 = function(big) {return big ? (BigInt(t.ui32())<<bis.bits) + BigInt(t.ui32()) : t.ui32()*0x100000000 + t.ui32()}
-		t.i64 = function(big) {var v=big ? BigInt(t.i32())<<bis.bits : t.i32()*0x100000000; return v + (big ? t.ui32() : BigInt(t.ui32()))}
+		t.i64 = function(big) {var v=big ? BigInt(t.i32())<<bis.bits : t.i32()*0x100000000; return v + (big ? BigInt(t.ui32()) : t.ui32())}
 		t.f32 = function() {
 			expect(4);
 			var n = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
