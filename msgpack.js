@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.1.0
+/// version 1.1.1
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -10,10 +10,12 @@
 	// if not supported, just a blank class
 	var typedArrays = typeof window.Uint8Array==="function" && typeof window.ArrayBuffer==="function",
 		nodeBuffers = typeof window.Buffer==="function",
+		bigInts = typeof window.BigInt==="function",
 		Uint8Array = window.Uint8Array || function(){},
 		ArrayBuffer = window.ArrayBuffer || function(){},
 		DataView = window.DataView || function(){},
 		Buffer = window.Buffer || function(){},
+		BigInt = window.BigInt || function(){},
 		bis = window.BigInt ? {bits: window.BigInt(32), mask: window.BigInt(0xffffffff)} : {};
 
 	// polyfills: supports back to IE5
@@ -122,8 +124,8 @@
 		t.i16 = function() {expect(2); var c = byte()*256 + byte(); if(c&0x8000) c |= (-1^65535); return c}
 		t.ui32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte() >>> 0}
 		t.i32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte() >> 0}
-		t.ui64 = function() {return t.ui32()*0x100000000 + t.ui32()}
-		t.i64 = function() {var v=t.i32()*0x100000000; return v + t.ui32()}
+		t.ui64 = function(big) {return big ? (BigInt(t.ui32())<<bis.bits) + BigInt(t.ui32()) : t.ui32()*0x100000000 + t.ui32()}
+		t.i64 = function(big) {var v=big ? BigInt(t.i32())<<bis.bits : t.i32()*0x100000000; return v + (big ? t.ui32() : BigInt(t.ui32()))}
 		t.f32 = function() {
 			expect(4);
 			var n = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
@@ -347,7 +349,7 @@
 				}
 			} else if(tp === "bigint") {
 				data.i8(o < 0 ? 0xd3 : 0xcf);
-				data.i32(Number(o >> bi.bits)).i32(Number(o & bi.mask));
+				data.i32(Number(o >> bis.bits)).i32(Number(o & bis.mask));
 			} else if(tp === "string") {
 				if(strenc === "utf8")
 					o = encodeUTF(o);
@@ -411,6 +413,8 @@
 		var bintype = "binaryType" in settings ? settings.binaryType.toLowerCase() : "string";
 		// stringEncoding: "utf8" | "latin1"
 		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : "utf8";
+		// bigInts: boolean
+		var bigints = bigInts && !!settings.bigInts;
 		var data = new BinReader(buf);
 
 		function decObj(n) {
@@ -463,11 +467,11 @@
 				case 0xcc: return data.ui8(); // uint 8
 				case 0xcd: return data.ui16(); // uint 16
 				case 0xce: return data.ui32(); // uint 32
-				case 0xcf: return data.ui64(); // uint 64
+				case 0xcf: return data.ui64(bigints); // uint 64
 				case 0xd0: return data.i8(); // int 8
 				case 0xd1: return data.i16(); // int 16
 				case 0xd2: return data.i32(); // int 32
-				case 0xd3: return data.i64(); // int 64
+				case 0xd3: return data.i64(bigints); // int 64
 				case 0xd4: return decExt(data.i8(),data.buf(1)); // fixext 1
 				case 0xd5: return decExt(data.i8(),data.buf(2)); // fixext 2
 				case 0xd6: return decExt(data.i8(),data.buf(4)); // fixext 4

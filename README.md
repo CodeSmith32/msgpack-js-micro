@@ -1,7 +1,7 @@
 # msgpack-js-micro
 msgpack - A super-lightweight JS implementation of the [msgpack](https://msgpack.org/) data encoding format.
 
-This is a very quick and extremely small Javascript implementation of msgpack, for ease of embedding. Both browser- and Node.js-ready.
+This is a simple, small, and very portable Javascript implementation of msgpack. Runs on browsers (back as far as IE5) as well as Node.js.
 
 **Browser:**
 
@@ -14,7 +14,8 @@ var obj = {
   37: 79.995,
   ar: [1, 2, 3],
   buffer: Uint8Array([1,2,3]), // uses msgpack's binary format
-  date: new Date(2019,1,1), // Date instances use msgpack's Timestamp format
+  date: new Date(2019,1,1), // Date instances use msgpack's Timestamp extension format
+  bigint: 31415926535897932384n, // large enough BigInts will be encoded as 64bit ints
 };
 
 var encoded = msgpack.encode(obj);
@@ -36,7 +37,8 @@ var obj = {
   37: 79.995,
   ar: [1, 2, 3],
   buffer: Uint8Array([1,2,3]), // uses msgpack's binary format
-  date: new Date(2019,1,1), // Date instances use msgpack's Timestamp format
+  date: new Date(2019,1,1), // Date instances use msgpack's Timestamp extension format
+  bigint: 31415926535897932384n, // large enough BigInts will be encoded as 64bit ints
 };
 
 var encoded = msgpack.encode(obj);
@@ -110,6 +112,12 @@ Specifies how strings will be decoded.
 - `"latin1"` strings will be considered char-buffers. The returned strings will not contain unicode characters.
 
 Default: `"utf8"`
+
+**`settings.bigInts?: boolean`**
+
+Whether or not to decode 64-bit integers as BigInts (if BigInts are supported). Other numeric types will be decoded as numbers.
+
+Notice: when a BigInt is encoded, if it's small enough, it won't be encoded as a 64-bit integer. This means that, when decoding, even if this setting is enabled, the decoded number will not be a BigInt, since a BigInt is not necessary to accurately represent the precision. If it is imperative that a certain value must be a BigInt after decoding, despite how big it is, it should be casted as a BigInt after decoding.
 
 #### Return: `any`
 Returns the Javascript object structure decoded from the packed data.
