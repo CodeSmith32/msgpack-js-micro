@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.0.1
+/// version 1.1.0
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -15,6 +15,11 @@
 		DataView = window.DataView || function(){},
 		Buffer = window.Buffer || function(){},
 		bis = window.BigInt ? {bits: window.BigInt(32), mask: window.BigInt(0xffffffff)} : {};
+
+	// polyfills: supports back to IE5
+	try{"name" in Function.prototype||(Object.defineProperty(Function.prototype,"name",{get:function(){return this.toString().match(/function\s*([^\s(]*)/)[1]}}))}catch(e){Function.prototype.name=""}
+	Array.isArray||(Array.isArray=function(a){return Object.prototype.toString.call(a)==="[object Array]"});
+	[].indexOf||(Array.prototype.indexOf=function(v,i){var l=this.length>>>0;if((i=(+i|0)||0)<0)i+=l;for(;i<l;i++){if(i in this&&this[i]===v)return i}return -1});
 
 	function normalizeString(buf) {
 		if(typeof buf=="string")
@@ -114,9 +119,11 @@
 		t.ui8 = function() {expect(1); return byte()}
 		t.i8 = function() {expect(1); var c = byte(); if(c&0x80) c |= (-1^255); return c}
 		t.ui16 = function() {expect(2); return byte()*256 + byte()}
-		t.i16 = function() {expect(2); var c = byte()*256 + byte(); if(c&0x8000) c |= (-1^65536); return c}
+		t.i16 = function() {expect(2); var c = byte()*256 + byte(); if(c&0x8000) c |= (-1^65535); return c}
 		t.ui32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte() >>> 0}
-		t.i32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte()}
+		t.i32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte() >> 0}
+		t.ui64 = function() {return t.ui32()*0x100000000 + t.ui32()}
+		t.i64 = function() {var v=t.i32()*0x100000000; return v + t.ui32()}
 		t.f32 = function() {
 			expect(4);
 			var n = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
@@ -159,6 +166,7 @@
 		t.i8 = function(n) {byte(n); return t}
 		t.i16 = function(n) {byte(n>>8); byte(n); return t}
 		t.i32 = function(n) {byte(n>>24); byte(n>>16); byte(n>>8); byte(n); return t}
+		t.i64 = function(n) {t.i32(floor(n/0x100000000)).i32(n); return t}
 		t.f32 = function(n) {
 			// special cases
 			if(isNaN(n)) {data += "\x7f\xc0\0\0"; return t}
@@ -280,6 +288,8 @@
 					else data.i8(0xc9).i32(buf.length);
 
 					data.i8(ext.ty).buf(buf);
+
+					return;
 				}
 			}
 			if(tp === "bigint" && o <= 0xffffffff) {
@@ -301,7 +311,7 @@
 				// boolean
 				data.i8(0xc2 + o);
 			} else if(tp === "number") {
-				if((o|0) === o) {
+				if(floor(o) === o) {
 					// int
 					if(o < 0) {
 						// negative
@@ -314,7 +324,7 @@
 						else if(o >= -0x80000000)
 							data.i8(0xd2).i32(o);
 						else
-							data.i8(0xd3).i32(o / 0x100000000).i32(o);
+							data.i8(0xd3).i64(o);
 					} else {
 						// positive
 						if(o < 128)
@@ -326,7 +336,7 @@
 						else if(o <= 0xffffffff)
 							data.i8(0xce).i32(o);
 						else
-							data.i8(0xcf).i32(o / 0x100000000).i32(o);
+							data.i8(0xcf).i64(o);
 					}
 				} else {
 					// float
@@ -445,19 +455,19 @@
 				case 0xc4: return decBin(data.buf(data.ui8())); // bin 8
 				case 0xc5: return decBin(data.buf(data.ui16())); // bin 16
 				case 0xc6: return decBin(data.buf(data.ui32())); // bin 32
-				case 0xc7: l = data.ui8(); return decExt(data.ui8(),data.buf(l)); // ext 8
-				case 0xc8: l = data.ui16(); return decExt(data.ui8(),data.buf(l)); // ext 16
-				case 0xc9: l = data.ui32(); return decExt(data.ui8(),data.buf(l)); // ext 32
+				case 0xc7: l = data.ui8(); return decExt(data.i8(),data.buf(l)); // ext 8
+				case 0xc8: l = data.ui16(); return decExt(data.i8(),data.buf(l)); // ext 16
+				case 0xc9: l = data.ui32(); return decExt(data.i8(),data.buf(l)); // ext 32
 				case 0xca: return data.f32(); // float 32
 				case 0xcb: return data.f64(); // float 64
 				case 0xcc: return data.ui8(); // uint 8
 				case 0xcd: return data.ui16(); // uint 16
 				case 0xce: return data.ui32(); // uint 32
-				case 0xcf: return data.ui32()*0x100000000 + data.ui32(); // uint 64
+				case 0xcf: return data.ui64(); // uint 64
 				case 0xd0: return data.i8(); // int 8
 				case 0xd1: return data.i16(); // int 16
 				case 0xd2: return data.i32(); // int 32
-				case 0xd3: l = data.i32()*0x100000000; return l + (l<0?-1:1)*data.ui32(); // int 64
+				case 0xd3: return data.i64(); // int 64
 				case 0xd4: return decExt(data.i8(),data.buf(1)); // fixext 1
 				case 0xd5: return decExt(data.i8(),data.buf(2)); // fixext 2
 				case 0xd6: return decExt(data.i8(),data.buf(4)); // fixext 4
@@ -478,6 +488,46 @@
 
 		return obj;
 	}
+
+	coreExtend({
+		type: -1,
+		encode: function(o){
+			// permits cross-iframe Date instances
+			if(Object.prototype.toString.call(o) !== "[object Date]" || typeof o.getTime !== "function") return false;
+			var time = o.getTime();
+			if(typeof time !== "number") return false;
+
+			var secs = time / 1000 | 0,
+				nano = (time - secs*1000)*1000000;
+
+			var data = new BinWriter();
+
+			if(secs < 0 || secs > 0x3ffffffff) // secs negative or >34 bit
+				data.i32(nano).i64(secs);
+			else if(nano || secs > 0xffffffff) // has nanosecs or secs >32 bit
+				data.i32(nano*4 + (secs/0x100000000 & 3)).i32(secs);
+			else // no nanosecs, secs <=32 bit
+				data.i32(secs);
+
+			return data.data();
+		},
+		decode: function(str){
+			var o = new Date(),
+				data = new BinReader(str),
+				secs = 0, nano = 0;
+
+			switch(str.length) {
+				case 4: secs = data.ui32(); break;
+				case 8: nano = data.ui32(); secs = data.ui32() + (nano&3)*0x100000000; nano = floor(nano/4); break;
+				case 12: nano = data.ui32(); secs = data.i64(); break;
+				default:
+					throw new Error("MsgPack Error: Failed to decode Timestamp: Unknown timestamp encoding version with length "+str.length);
+			}
+			o.setTime(secs*1000 + nano/1000000); // this may lose precision, but js doesn't have much precision with Dates
+
+			return o;
+		}
+	});
 
 	if(typeof module === "object" && typeof module.exports === "object")
 		module.exports = t;

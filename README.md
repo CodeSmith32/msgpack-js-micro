@@ -14,6 +14,7 @@ var obj = {
   37: 79.995,
   ar: [1, 2, 3],
   buffer: Uint8Array([1,2,3]), // uses msgpack's binary format
+  date: new Date(2019,1,1), // Date instances use msgpack's Timestamp format
 };
 
 var encoded = msgpack.encode(obj);
@@ -35,6 +36,7 @@ var obj = {
   37: 79.995,
   ar: [1, 2, 3],
   buffer: Uint8Array([1,2,3]), // uses msgpack's binary format
+  date: new Date(2019,1,1), // Date instances use msgpack's Timestamp format
 };
 
 var encoded = msgpack.encode(obj);
@@ -154,5 +156,4 @@ The `msgpack.extend()` function returns `undefined`.
 ----------------------------------------------------------------
 
 ## TODO:
-- The Timestamp extension type.
 - Thoroughly test
