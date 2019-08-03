@@ -3,6 +3,8 @@ msgpack - A super-lightweight JS implementation of the [msgpack](https://msgpack
 
 This is a simple, small, and very portable Javascript implementation of msgpack. Runs on browsers (back as far as IE5) as well as Node.js.
 
+Notice: This implementation is still fairly new, and may have bugs. If you find any bugs, please report them immediately, and I will try to get them fixed as soon as possible.
+
 **Browser:**
 
 ```
@@ -53,6 +55,22 @@ console.log(decoded);
 ### msgpack.encode(data, settings = {})
 
 Encodes an object in the msgpack format. If a cyclic structure is detected, an error will be thrown.
+
+The following object types are encoded:
+
+- Number (encoded as signed / unsigned integer or float / double, best datatype chosen to preserve precision)
+- BigInt (encoded as signed / unsigned integer, 64-bit when big enough)
+- String (encoded as string, UTF-8 or Latin-1 encoded)
+- ArrayBuffer, Buffer, TypedArray (encoded as binary)
+- Array (encoded as array)
+- Object (encoded as map)
+- Date (encoded in core Timestamp extension format)
+
+Notices:
+
+When a BigInt is encoded, if it's small enough, it won't be encoded as a 64-bit integer. Thus, if decoding, even when `bigInts` is enabled, the decoded number will not be a BigInt, since a BigInt is not necessary to accurately represent the precision.
+
+Date objects do not contain timezone information, but instead report UTC time offset by the local system's timezone. Thus, decoded Date objects, when printed, may appear to report a different time than was encoded due to the offset from UTC.
 
 #### `data: any`
 The object data to encode in msgpack-format.
