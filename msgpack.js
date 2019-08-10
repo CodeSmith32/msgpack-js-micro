@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.1.2
+/// version 1.1.3
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -400,7 +400,7 @@
 					if(l) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
 				}
 				iterated.pop();
-			}
+			} else throw new Error("MsgPack Error: Failed to encode element of type "+tp);
 		}
 		encode(obj);
 
