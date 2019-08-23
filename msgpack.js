@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.2.0
+/// version 1.2.1
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -300,12 +300,20 @@
 		extTypes[type] = ext;
 	}
 
+	var dataTypes = {string:0, buffer:0, arraybuffer:0},
+		encodeTypes = {utf8:0, latin1:0};
+
+	var encDefaults = {
+		returnType: "string",
+		stringEncoding: "utf8"
+	};
+
 	t.encode = function(obj,settings) {
 		settings = settings || {};
 		// returnType: "string" | "buffer" | "arraybuffer"
-		var rettype = "returnType" in settings ? settings.returnType.toLowerCase() : "string";
+		var rettype = "returnType" in settings ? settings.returnType.toLowerCase() : encDefaults.returnType;
 		// stringEncoding: "utf8" | "latin1"
-		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : "utf8";
+		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : encDefaults.stringEncoding;
 		var data = new BinWriter();
 
 		var iterated = [];
@@ -448,14 +456,42 @@
 		return toRequestedType(data.data(),rettype);
 	}
 
+	t.encode.defaults = function(settings) {
+		if(typeof settings === "string") {
+			if(settings in encDefaults)
+				return encDefaults[settings];
+			throw new Error("Unknown encode setting name: "+settings);
+		}
+
+		if(typeof settings !== "object")
+			throw new Error("Could not set encode defaults with non-object setting input");
+
+		if("returnType" in settings) {
+			if(typeof settings.returnType !== "string" || !(settings.returnType in dataTypes))
+				throw new Error("MsgPack Error: Invalid encode default value for returnType");
+			encDefaults.returnType = settings.returnType;
+		}
+		if("stringEncoding" in settings) {
+			if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
+				throw new Error("MsgPack Error: Invalid encode default value for stringEncoding");
+			encDefaults.stringEncoding = settings.stringEncoding;
+		}
+	}
+
+	var decDefaults = {
+		binaryType: "string",
+		stringEncoding: "utf8",
+		bigInts: false
+	};
+
 	t.decode = function(buf,settings) {
 		settings = settings || {};
 		// binaryType: "string" | "buffer" | "arraybuffer"
-		var bintype = "binaryType" in settings ? settings.binaryType.toLowerCase() : "string";
+		var bintype = "binaryType" in settings ? settings.binaryType.toLowerCase() : decDefaults.binaryType;
 		// stringEncoding: "utf8" | "latin1"
-		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : "utf8";
+		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : decDefaults.stringEncoding;
 		// bigInts: boolean
-		var bigints = bigInts && !!settings.bigInts;
+		var bigints = bigInts && ("bigInts" in settings ? !!settings.bigInts : decDefaults.bigInts);
 		var data = new BinReader(buf);
 
 		function decObj(n) {
@@ -532,6 +568,33 @@
 		if(!data.eof()) throw new Error("MsgPack Error: Trying to decode more data than expected");
 
 		return obj;
+	}
+
+	t.decode.defaults = function(settings) {
+		if(typeof settings === "string") {
+			if(settings in decDefaults)
+				return decDefaults[settings];
+			throw new Error("Unknown decode setting name: "+settings);
+		}
+
+		if(typeof settings !== "object")
+			throw new Error("Could not set decode defaults with non-object setting input");
+
+		if("binaryType" in settings) {
+			if(typeof settings.binaryType !== "string" || !(settings.binaryType in dataTypes))
+				throw new Error("MsgPack Error: Invalid decode default value for binaryType");
+			decDefaults.binaryType = settings.binaryType;
+		}
+		if("stringEncoding" in settings) {
+			if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
+				throw new Error("MsgPack Error: Invalid decode default value for stringEncoding");
+			decDefaults.stringEncoding = settings.stringEncoding;
+		}
+		if("bigInts" in settings) {
+			if(typeof settings.bigInts !== "boolean")
+				throw new Error("MsgPack Error: Non-boolean decode default value for bigInts");
+			decDefaults.bigInts = settings.bigInts;
+		}
 	}
 
 	coreExtend({

@@ -142,6 +142,69 @@ Returns the Javascript object structure decoded from the packed data.
 
 ----------------------------------------------------------------
 
+### msgpack.encode.defaults(params)
+
+Get / set default parameters for the `msgpack.encode` function. If `params` is a string, the function will return the default value used for the setting by that name. If `params` is an object, the keys will be interpreted as setting names, and the values will replace the current defaults.
+
+Notice, when changing setting default values, values are handled very strictly, and invalid values will trigger an error.
+
+#### `params: string | object`
+If this parameter is a string, then the current default value for the encode setting by this name will be returned.
+
+If this parameter is an object, it should have any one or more of the following keys to configure the default values for encode settings:
+
+**`params.returnType?: "string" | "buffer" | "arraybuffer"`**
+
+The datatype in which to return the msgpack encoded data. See `msgpack.encode(...)` for encode setting details.
+
+**`params.stringEncoding?: "utf8" | "latin1"`**
+
+Specifies how Javascript strings should be encoded. See `msgpack.encode(...)` for encode setting details.
+
+#### Return: `any | void`
+If a string is provided as the parameter, the value returned is the default value for the setting by that name. Specifically:
+
+- Passing `"returnType"` returns a string
+- Passing `"stringEncoding"` returns a string
+
+If an object is provided as the parameter to assign defaults, `undefined` is returned.
+
+----------------------------------------------------------------
+
+### msgpack.decode.defaults(params)
+
+Get / set default parameters for the `msgpack.decode` function. If `params` is a string, the function will return the default value used for the setting by that name. If `params` is an object, the keys will be interpreted as setting names, and the values will replace the current defaults.
+
+Notice, when changing setting default values, values are handled very strictly, and invalid values will trigger an error.
+
+#### `params: string | object`
+If this parameter is a string, then the current default value for the decode setting by this name will be returned.
+
+If this parameter is an object, it should have any one or more of the following keys to configure the default values for decode settings:
+
+**`params.binaryType?: "string" | "buffer" | "arraybuffer"`**
+
+The JS object type to convert decoded binary msgpack entities into. See `msgpack.decode(...)` for decode setting details.
+
+**`params.stringEncoding?: "utf8" | "latin1"`**
+
+Specifies how strings will be decoded. See `msgpack.decode(...)` for decode setting details.
+
+**`params.bigInts?: boolean`**
+
+Whether or not to decode 64-bit integers as BigInts (if BigInts are supported). See `msgpack.decode(...)` for decode setting details.
+
+#### Return: `any | void`
+If a string is provided as the parameter, the value returned is the default value for the setting by that name. Specifically:
+
+- Passing `"binaryType"` returns a string
+- Passing `"stringEncoding"` returns a string
+- Passing `"bigInts"` returns a boolean
+
+If an object is provided as the parameter to assign defaults, `undefined` is returned.
+
+----------------------------------------------------------------
+
 ### msgpack.extend(extensionObject)
 
 Adds an extension format to msgpack.
