@@ -1,5 +1,5 @@
 # msgpack-js-micro
-msgpack - A super-lightweight JS implementation of the [msgpack](https://msgpack.org/) data encoding format.
+msgpack - A fast, lightweight, and extremely compatible JS implementation of the [msgpack](https://msgpack.org/) data encoding format.
 
 This is a simple, small, and very portable Javascript implementation of msgpack. Runs on browsers (back as far as IE5) as well as Node.js.
 
