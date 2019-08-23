@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.1.4
+/// version 1.2.0
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -16,7 +16,12 @@
 		DataView = window.DataView || function(){},
 		Buffer = window.Buffer || function(){},
 		BigInt = window.BigInt || function(){},
-		bis = window.BigInt ? {bits: window.BigInt(32), mask: window.BigInt(0xffffffff)} : {};
+		bis = window.BigInt ? {bits: window.BigInt(32), mask: window.BigInt(0xffffffff)} : {},
+		f32bytes = typedArrays && new window.Uint8Array(4),
+		f32num = typedArrays && new window.Float32Array(f32bytes.buffer),
+		f64bytes = typedArrays && new window.Uint8Array(8),
+		f64num = typedArrays && new window.Float64Array(f64bytes.buffer),
+		littleEndian = typedArrays && (new Uint32Array(new Uint8Array([1,0,0,0]).buffer)[0] === 1);
 
 	// polyfills: supports back to IE5
 	try{"name" in Function.prototype||(Object.defineProperty(Function.prototype,"name",{get:function(){return this.toString().match(/function\s*([^\s(]*)/)[1]}}))}catch(e){Function.prototype.name=""}
@@ -126,34 +131,53 @@
 		t.i32 = function() {expect(4); return byte()*16777216 + byte()*65536 + byte()*256 + byte() >> 0}
 		t.ui64 = function(big) {return big ? (BigInt(t.ui32())<<bis.bits) + BigInt(t.ui32()) : t.ui32()*0x100000000 + t.ui32()}
 		t.i64 = function(big) {var v=big ? BigInt(t.i32())<<bis.bits : t.i32()*0x100000000; return v + (big ? BigInt(t.ui32()) : t.ui32())}
-		t.f32 = function() {
-			expect(4);
-			var n = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
-				s = !!(n&0x80000000), e = (n>>23)&255, m = (n&0x7fffff);
-
-			// special cases
-			if(e === 255) {
-				if(m === 0) return s ? -Infinity : Infinity; // infinity
-				return NaN; // NaN
+		if(typedArrays) {
+			t.f32 = function() {
+				expect(4);
+				if(littleEndian)
+					for(var i=3;i>=0;i--) f32bytes[i] = byte();
+				else
+					for(var i=0;i<4;i++) f32bytes[i] = byte();
+				return f32num[0];
 			}
-			if(e === 0) return m / f32_dnm; // denormal numbers
-
-			m += 0x800000;
-			return m * (s?-1:1) * pow(2,e-127 - 23);
-		}
-		t.f64 = function() {
-			expect(8);
-			var a = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
-				b = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
-				s = !!(a&0x80000000), e = (a>>20 & 2047), m = (a&0xfffff)*0x100000000 + b;
-
-			if(e === 2047) {
-				if(m === 0) return s ? -Infinity : Infinity; // infinity
-				return NaN; // NaN
+			t.f64 = function() {
+				expect(8);
+				if(littleEndian)
+					for(var i=7;i>=0;i--) f64bytes[i] = byte();
+				else
+					for(var i=0;i<8;i++) f64bytes[i] = byte();
+				return f64num[0];
 			}
-			if(e === 0) return m / f64_dnm1 / f64_dnm2;
+		} else {
+			t.f32 = function() {
+				expect(4);
+				var n = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
+					s = !!(n&0x80000000), e = (n>>23)&255, m = (n&0x7fffff);
 
-			return (m/f64_dnm2 + 1) * (s?-1:1) * pow(2,e-1023);
+				// special cases
+				if(e === 255) {
+					if(m === 0) return s ? -Infinity : Infinity; // infinity
+					return NaN; // NaN
+				}
+				if(e === 0) return m / f32_dnm; // denormal numbers
+
+				m += 0x800000;
+				return m * (s?-1:1) * pow(2,e-127 - 23);
+			}
+			t.f64 = function() {
+				expect(8);
+				var a = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
+					b = byte()*16777216 + byte()*65536 + byte()*256 + byte(),
+					s = !!(a&0x80000000), e = (a>>20 & 2047), m = (a&0xfffff)*0x100000000 + b;
+
+				if(e === 2047) {
+					if(m === 0) return s ? -Infinity : Infinity; // infinity
+					return NaN; // NaN
+				}
+				if(e === 0) return m / f64_dnm1 / f64_dnm2;
+
+				return (m/f64_dnm2 + 1) * (s?-1:1) * pow(2,e-1023);
+			}
 		}
 		t.buf = function(l) {expect(l); var s=data.slice(i,i+l); i+=l; return s}
 		t.eof = function() {return i >= data.length}
@@ -169,51 +193,68 @@
 		t.i16 = function(n) {byte(n>>8); byte(n); return t}
 		t.i32 = function(n) {byte(n>>24); byte(n>>16); byte(n>>8); byte(n); return t}
 		t.i64 = function(n) {t.i32(floor(n/0x100000000)).i32(n); return t}
-		t.f32 = function(n) {
-			// special cases
-			if(isNaN(n)) {data += "\x7f\xc0\0\0"; return t}
-			if(n === Infinity) {data += "\x7f\x80\0\0"; return t}
-			if(n === -Infinity) {data += "\xff\x80\0\0"; return t}
-			if(n === 0) {data += "\0\0\0\0"; return t}
+		if(typedArrays) {
+			t.f32 = function(n) {
+				f32num[0] = n;
+				if(littleEndian)
+					for(var i=3;i>=0;i--) byte(f32bytes[i]);
+				else
+					for(var i=0;i<4;i++) byte(f32bytes[i]);
+			}
+			t.f64 = function(n) {
+				f64num[0] = n;
+				if(littleEndian)
+					for(var i=7;i>=0;i--) byte(f64bytes[i]);
+				else
+					for(var i=0;i<8;i++) byte(f64bytes[i]);
+			}
+		} else {
+			t.f32 = function(n) {
+				// special cases
+				if(isNaN(n)) {data += "\x7f\xc0\0\0"; return t}
+				if(n === Infinity) {data += "\x7f\x80\0\0"; return t}
+				if(n === -Infinity) {data += "\xff\x80\0\0"; return t}
+				if(n === 0) {data += "\0\0\0\0"; return t}
 
-			var s = n<0, v = s?-n:n, e = floor(log2(v)), m = round(v*pow(2,23-e)) - 0x800000;
-			e += 127;
-			if(m > 0x7fffff) {e++; m &= 0x7fffff} // round lost precision
-			if(e > 254) {data += s ? "\xff\x80\0\0" : "\x7f\x80\0\0"; return t} // imprecise infinity
-			if(e <= 0) {e = 0; m = round(v*f32_dnm)} // denormal number
+				var s = n<0, v = s?-n:n, e = floor(log2(v)), m = round(v*pow(2,23-e)) - 0x800000;
+				e += 127;
+				if(m > 0x7fffff) {e++; m &= 0x7fffff} // round lost precision
+				if(e > 254) {data += s ? "\xff\x80\0\0" : "\x7f\x80\0\0"; return t} // imprecise infinity
+				if(e <= 0) {e = 0; m = round(v*f32_dnm)} // denormal number
 
-			// seeeeeee emmmmmmm mmmmmmmm mmmmmmmm
-			byte((s<<7) | (e>>1 & 0x7f));
-			byte((e<<7) | (m>>16 & 0x7f));
-			byte(m>>8);
-			byte(m);
+				// seeeeeee emmmmmmm mmmmmmmm mmmmmmmm
+				byte((s<<7) | (e>>1 & 0x7f));
+				byte((e<<7) | (m>>16 & 0x7f));
+				byte(m>>8);
+				byte(m);
 
-			return t;
-		}
-		t.f64 = function(n) {
-			// special cases
-			if(isNaN(n)) {data += "\x7f\xf8\0\0\0\0\0\0"; return t}
-			if(n === Infinity) {data += "\x7f\xf0\0\0\0\0\0\0"; return t}
-			if(n === -Infinity) {data += "\xff\xf0\0\0\0\0\0\0"; return t}
-			if(n === 0) {data += "\0\0\0\0\0\0\0\0"; return t}
+				return t;
+			}
+			t.f64 = function(n) {
+				// special cases
+				if(isNaN(n)) {data += "\x7f\xf8\0\0\0\0\0\0"; return t}
+				if(n === Infinity) {data += "\x7f\xf0\0\0\0\0\0\0"; return t}
+				if(n === -Infinity) {data += "\xff\xf0\0\0\0\0\0\0"; return t}
+				if(n === 0) {data += "\0\0\0\0\0\0\0\0"; return t}
 
-			var s = n<0, v = s?-n:n, e = floor(log2(v)), m = round(e>0 ? v*pow(2,52-e) : v*pow(2,52)*pow(2,-e)) - 0x10000000000000;
-			e += 1023;
-			if(m > 0x7fffffffffffff) {e++; m -= 0x80000000000000} // round lost precision
-			if(e > 2046) {data += s ? "\xff\xf0\0\0\0\0\0\0" : "\x7f\xf0\0\0\0\0\0\0"; return t} // imprecise infinity
-			if(e <= 0) {e = 0; m = round(v*f64_dnm1*f64_dnm2)} // denormal number
+				var s = n<0, v = s?-n:n, e = floor(log2(v)), m = round(e>0 ? v*pow(2,52-e) : v*pow(2,52)*pow(2,-e)) - 0x10000000000000;
+				e += 1023;
+				if(m > 0x7fffffffffffff) {e++; m -= 0x80000000000000} // round lost precision
+				if(e > 2046) {data += s ? "\xff\xf0\0\0\0\0\0\0" : "\x7f\xf0\0\0\0\0\0\0"; return t} // imprecise infinity
+				if(e <= 0) {e = 0; m = round(v*f64_dnm1*f64_dnm2)} // denormal number
 
-			// seeeeeee eeeemmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm
-			byte((s<<7) | (e>>4 & 0x7f));
-			byte((e<<4) | (m/0x1000000000000 & 0x0f));
-			byte(m/0x10000000000);
-			byte(m/0x100000000);
-			byte(m/0x1000000);
-			byte(m/0x10000);
-			byte(m/0x100);
-			byte(m);
+				// seeeeeee eeeemmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm mmmmmmmm
+				byte((s<<7) | (e>>4 & 0x7f));
+				byte((e<<4) | (m/0x1000000000000 & 0x0f));
+				byte(m/0x10000000000);
+				byte(m/0x100000000);
+				byte(m/0x1000000);
+				byte(m/0x10000);
+				byte(m/0x100);
+				byte(m);
 
-			return t;
+				return t;
+			}
 		}
 		t.buf = function(s) {data += s; return t}
 
