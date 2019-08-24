@@ -1,11 +1,10 @@
 /// micro msgpack library
-/// version 1.2.1
+/// version 1.3.0
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
 (function(window){
 	'use strict';
-	var t = {};
 
 	// if not supported, just a blank class
 	var typedArrays = typeof window.Uint8Array==="function" && typeof window.ArrayBuffer==="function",
@@ -261,384 +260,398 @@
 		t.data = function() {return data}
 	}
 
-	var exts = {}, extTypes = {};
-	t.extend = function(params/* {type:int, encode:(obj:*)=>string|false, decode:(data:string)=>obj:*} */) {
-		var type = params.type,
-			tpof = params.varType || 'object',
-			encode = params.encode,
-			decode = params.decode,
-			ext = {
-				enc: encode,
-				dec: decode,
-				ty: type
-			};
+	function msgpack(encodeDefs,decodeDefs) {
+		var t=this; if(!(t instanceof msgpack)) throw new Error("Bad instantiation of object msgpack");
 
-		if(typeof type !== "number" || type < 0 || type > 127)
-			throw new Error("MsgPack Error: Failed to add extension with type code: "+(typeof type)+" "+(+type));
+		var exts = {}, extTypes = {};
+		t.extend = function(params/* {type:int, encode:(obj:*)=>string|false, decode:(data:string)=>obj:*} */) {
+			var type = params.type,
+				tpof = params.varType || 'object',
+				encode = params.encode,
+				decode = params.decode,
+				ext = {
+					enc: encode,
+					dec: decode,
+					ty: type
+				};
 
-		if(typeof encode !== "function") throw new Error("MsgPack Error: Failed to add extension; missing 'encode' function");
-		if(typeof decode !== "function") throw new Error("MsgPack Error: Failed to add extension; missing 'decode' function");
+			if(typeof type !== "number" || type < 0 || type > 127)
+				throw new Error("MsgPack Error: Failed to add extension with type code: "+(typeof type)+" "+(+type));
 
-		if(type in extTypes) throw new Error("MsgPack Error: Failed to register extension with code "+type+"; extension code already in use");
+			if(typeof encode !== "function") throw new Error("MsgPack Error: Failed to add extension; missing 'encode' function");
+			if(typeof decode !== "function") throw new Error("MsgPack Error: Failed to add extension; missing 'decode' function");
 
-		(exts[tpof] = exts[tpof] || []).push(ext);
-		extTypes[type] = ext;
-	}
+			if(type in extTypes) throw new Error("MsgPack Error: Failed to register extension with code "+type+"; extension code already in use");
 
-	function coreExtend(params) {
-		var type = params.type,
-			tpof = params.varType || 'object',
-			ext = {
-				enc: params.encode,
-				dec: params.decode,
-				ty: type
-			};
-
-		if(type >= 0) throw new Error("MsgPack Error: Failed to add core extension; type code must be negative: "+(+type));
-
-		(exts[tpof] = exts[tpof] || []).push(ext);
-		extTypes[type] = ext;
-	}
-
-	var dataTypes = {string:0, buffer:0, arraybuffer:0},
-		encodeTypes = {utf8:0, latin1:0};
-
-	var encDefaults = {
-		returnType: "string",
-		stringEncoding: "utf8"
-	};
-
-	t.encode = function(obj,settings) {
-		settings = settings || {};
-		// returnType: "string" | "buffer" | "arraybuffer"
-		var rettype = "returnType" in settings ? settings.returnType.toLowerCase() : encDefaults.returnType;
-		// stringEncoding: "utf8" | "latin1"
-		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : encDefaults.stringEncoding;
-		var data = new BinWriter();
-
-		var iterated = [];
-
-		function encode(o) {
-			var tp = typeof o;
-			if(tp in exts) {
-				for(var i=0,ext,buf;i<exts[tp].length;i++) {
-					ext = exts[tp][i];
-					buf = ext.enc(o);
-					if(buf === false) continue;
-					if(buf === undefined || buf === null)
-						throw new Error("MsgPack Error: Extension code "+ext.ty+" failed to return a valid buffer");
-					buf = normalizeString(buf);
-
-					if(buf.length === 1) data.i8(0xd4);
-					else if(buf.length === 2) data.i8(0xd5);
-					else if(buf.length === 4) data.i8(0xd6);
-					else if(buf.length === 8) data.i8(0xd7);
-					else if(buf.length === 16) data.i8(0xd8);
-					else if(buf.length < 256) data.i8(0xc7).i8(buf.length);
-					else if(buf.length < 65536) data.i8(0xc8).i16(buf.length);
-					else data.i8(0xc9).i32(buf.length);
-
-					data.i8(ext.ty).buf(buf);
-
-					return;
-				}
-			}
-			if(tp === "bigint" && o <= 0xffffffff) {
-				o = Number(o); tp = "number";
-			}
-			if(o && o.constructor.name.match(/^(Big)?(Uint|Int|Float)(8|16|32|64)(Clamped)?Array$|^(ArrayBuffer|Buffer|DataView)$/)) {
-				// buffer
-				o = normalizeString(o);
-				if(o.length < 256)
-					data.i8(0xc4).i8(o.length).buf(o);
-				else if(o.length < 65536)
-					data.i8(0xc5).i16(o.length).buf(o);
-				else
-					data.i8(0xc6).i32(o.length).buf(o);
-			} else if(o === null || o === undefined) {
-				// nil
-				data.i8(0xc0);
-			} else if(tp === "boolean") {
-				// boolean
-				data.i8(0xc2 + o);
-			} else if(tp === "number") {
-				if(floor(o) === o) {
-					// int
-					if(o < 0) {
-						// negative
-						if(o >= -32)
-							data.i8(o);
-						else if(o >= -128)
-							data.i8(0xd0).i8(o);
-						else if(o >= -32768)
-							data.i8(0xd1).i16(o);
-						else if(o >= -0x80000000)
-							data.i8(0xd2).i32(o);
-						else
-							data.i8(0xd3).i64(o);
-					} else {
-						// positive
-						if(o < 128)
-							data.i8(o);
-						else if(o < 256)
-							data.i8(0xcc).i8(o);
-						else if(o < 65536)
-							data.i8(0xcd).i16(o);
-						else if(o <= 0xffffffff)
-							data.i8(0xce).i32(o);
-						else
-							data.i8(0xcf).i64(o);
-					}
-				} else {
-					// float
-					if(needsF64(o))
-						data.i8(0xcb).f64(o);
-					else
-						data.i8(0xca).f32(o);
-				}
-			} else if(tp === "bigint") {
-				data.i8(o < 0 ? 0xd3 : 0xcf);
-				data.i32(Number(o >> bis.bits)).i32(Number(o & bis.mask));
-			} else if(tp === "string") {
-				if(strenc === "utf8")
-					o = encodeUTF(o);
-				else
-					o = truncBufferString(o);
-				if(o.length < 32)
-					data.i8(0xa0 | o.length).buf(o);
-				else if(o.length < 256)
-					data.i8(0xd9).i8(o.length).buf(o);
-				else if(o.length < 65536)
-					data.i8(0xda).i16(o.length).buf(o);
-				else
-					data.i8(0xdb).i32(o.length).buf(o);
-			} else if(tp === "object") {
-				if(iterated.indexOf(o) > -1)
-					throw new Error("MsgPack Error: Failed to encode object with recursive properties");
-				iterated.push(o);
-				if(Array.isArray(o)) {
-					// array
-					if(o.length < 16)
-						data.i8(0x90 | o.length);
-					else if(o.length < 65536)
-						data.i8(0xdc).i16(o.length);
-					else
-						data.i8(0xdd).i32(o.length);
-					for(var i=0;i<o.length;i++)
-						encode(o[i]);
-				} else {
-					// map
-					var l = 0;
-					for(var i in o) {
-						if(o[i] === undefined) continue;
-						l++;
-					}
-					if(l < 16)
-						data.i8(0x80 | l);
-					else if(l < 65536)
-						data.i8(0xde).i16(l);
-					else
-						data.i8(0xdf).i32(l);
-
-					for(var i in o) {
-						if(o[i] === undefined) continue;
-						encode(i);
-						encode(o[i]);
-						if(--l < 0) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
-					}
-					if(l) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
-				}
-				iterated.pop();
-			} else throw new Error("MsgPack Error: Failed to encode element of type "+tp);
-		}
-		encode(obj);
-
-		return toRequestedType(data.data(),rettype);
-	}
-
-	t.encode.defaults = function(settings) {
-		if(typeof settings === "string") {
-			if(settings in encDefaults)
-				return encDefaults[settings];
-			throw new Error("Unknown encode setting name: "+settings);
+			(exts[tpof] = exts[tpof] || []).push(ext);
+			extTypes[type] = ext;
 		}
 
-		if(typeof settings !== "object")
-			throw new Error("Could not set encode defaults with non-object setting input");
+		function coreExtend(params) {
+			var type = params.type,
+				tpof = params.varType || 'object',
+				ext = {
+					enc: params.encode,
+					dec: params.decode,
+					ty: type
+				};
 
-		if("returnType" in settings) {
-			if(typeof settings.returnType !== "string" || !(settings.returnType in dataTypes))
-				throw new Error("MsgPack Error: Invalid encode default value for returnType");
-			encDefaults.returnType = settings.returnType;
-		}
-		if("stringEncoding" in settings) {
-			if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
-				throw new Error("MsgPack Error: Invalid encode default value for stringEncoding");
-			encDefaults.stringEncoding = settings.stringEncoding;
-		}
-	}
+			if(type >= 0) throw new Error("MsgPack Error: Failed to add core extension; type code must be negative: "+(+type));
 
-	var decDefaults = {
-		binaryType: "string",
-		stringEncoding: "utf8",
-		bigInts: false
-	};
-
-	t.decode = function(buf,settings) {
-		settings = settings || {};
-		// binaryType: "string" | "buffer" | "arraybuffer"
-		var bintype = "binaryType" in settings ? settings.binaryType.toLowerCase() : decDefaults.binaryType;
-		// stringEncoding: "utf8" | "latin1"
-		var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : decDefaults.stringEncoding;
-		// bigInts: boolean
-		var bigints = bigInts && ("bigInts" in settings ? !!settings.bigInts : decDefaults.bigInts);
-		var data = new BinReader(buf);
-
-		function decObj(n) {
-			var o = {};
-			for(var i=0;i<n;i++)
-				o[decode()] = decode();
-			return o;
-		}
-		function decArr(n) {
-			var o = [];
-			for(var i=0;i<n;i++)
-				o.push(decode());
-			return o;
-		}
-		function decBin(buf) {
-			return toRequestedType(buf,bintype);
-		}
-		function decStr(str) {
-			if(strenc === "utf8")
-				return decodeUTF(str);
-			return str;
-		}
-		function decExt(type,buf) {
-			if(!(type in extTypes)) {
-				console.warn("MsgPack Warning: Failed to decode unregistered extension type "+type);
-				return null;
-			}
-			return extTypes[type].dec(buf);
-		}
-		function decode() {
-			var b = data.ui8(), l;
-			if((b&0x80) === 0) return b; // +fixint
-			if((b&0xe0) === 0xe0) return b|(-1^255); // -fixint
-			if((b&0xf0) === 0x80) return decObj(b&15); // fixmap
-			if((b&0xf0) === 0x90) return decArr(b&15); // fixarray
-			if((b&0xe0) === 0xa0) return decStr(data.buf(b&31)); // fixstr
-			switch(b) {
-				case 0xc1: // ehh.. just map it to nil
-				case 0xc0: return null; // nil
-				case 0xc2: return false; // false
-				case 0xc3: return true; // true
-				case 0xc4: return decBin(data.buf(data.ui8())); // bin 8
-				case 0xc5: return decBin(data.buf(data.ui16())); // bin 16
-				case 0xc6: return decBin(data.buf(data.ui32())); // bin 32
-				case 0xc7: l = data.ui8(); return decExt(data.i8(),data.buf(l)); // ext 8
-				case 0xc8: l = data.ui16(); return decExt(data.i8(),data.buf(l)); // ext 16
-				case 0xc9: l = data.ui32(); return decExt(data.i8(),data.buf(l)); // ext 32
-				case 0xca: return data.f32(); // float 32
-				case 0xcb: return data.f64(); // float 64
-				case 0xcc: return data.ui8(); // uint 8
-				case 0xcd: return data.ui16(); // uint 16
-				case 0xce: return data.ui32(); // uint 32
-				case 0xcf: return data.ui64(bigints); // uint 64
-				case 0xd0: return data.i8(); // int 8
-				case 0xd1: return data.i16(); // int 16
-				case 0xd2: return data.i32(); // int 32
-				case 0xd3: return data.i64(bigints); // int 64
-				case 0xd4: return decExt(data.i8(),data.buf(1)); // fixext 1
-				case 0xd5: return decExt(data.i8(),data.buf(2)); // fixext 2
-				case 0xd6: return decExt(data.i8(),data.buf(4)); // fixext 4
-				case 0xd7: return decExt(data.i8(),data.buf(8)); // fixext 8
-				case 0xd8: return decExt(data.i8(),data.buf(16)); // fixext 16
-				case 0xd9: return decStr(data.buf(data.ui8())); // str 8
-				case 0xda: return decStr(data.buf(data.ui16())); // str 16
-				case 0xdb: return decStr(data.buf(data.ui32())); // str 32
-				case 0xdc: return decArr(data.ui16()); // array 16
-				case 0xdd: return decArr(data.ui32()); // array 32
-				case 0xde: return decObj(data.ui16()); // map 16
-				case 0xdf: return decObj(data.ui32()); // map 32
-			}
-			throw new Error("MsgPack Error: Somehow encountered unknown byte code: "+b);
-		}
-		var obj = decode();
-		if(!data.eof()) throw new Error("MsgPack Error: Trying to decode more data than expected");
-
-		return obj;
-	}
-
-	t.decode.defaults = function(settings) {
-		if(typeof settings === "string") {
-			if(settings in decDefaults)
-				return decDefaults[settings];
-			throw new Error("Unknown decode setting name: "+settings);
+			(exts[tpof] = exts[tpof] || []).push(ext);
+			extTypes[type] = ext;
 		}
 
-		if(typeof settings !== "object")
-			throw new Error("Could not set decode defaults with non-object setting input");
+		var dataTypes = {string:0, buffer:0, arraybuffer:0},
+			encodeTypes = {utf8:0, latin1:0};
 
-		if("binaryType" in settings) {
-			if(typeof settings.binaryType !== "string" || !(settings.binaryType in dataTypes))
-				throw new Error("MsgPack Error: Invalid decode default value for binaryType");
-			decDefaults.binaryType = settings.binaryType;
-		}
-		if("stringEncoding" in settings) {
-			if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
-				throw new Error("MsgPack Error: Invalid decode default value for stringEncoding");
-			decDefaults.stringEncoding = settings.stringEncoding;
-		}
-		if("bigInts" in settings) {
-			if(typeof settings.bigInts !== "boolean")
-				throw new Error("MsgPack Error: Non-boolean decode default value for bigInts");
-			decDefaults.bigInts = settings.bigInts;
-		}
-	}
+		var encDefaults = {
+			returnType: "string",
+			stringEncoding: "utf8"
+		};
 
-	coreExtend({
-		type: -1,
-		encode: function(o){
-			// permits cross-iframe Date instances
-			if(Object.prototype.toString.call(o) !== "[object Date]" || typeof o.getTime !== "function") return false;
-			var time = o.getTime();
-			if(typeof time !== "number") return false;
-
-			var secs = time / 1000 | 0,
-				nano = (time - secs*1000)*1000000;
-
+		t.encode = function(obj,settings) {
+			settings = settings || {};
+			// returnType: "string" | "buffer" | "arraybuffer"
+			var rettype = "returnType" in settings ? settings.returnType.toLowerCase() : encDefaults.returnType;
+			// stringEncoding: "utf8" | "latin1"
+			var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : encDefaults.stringEncoding;
 			var data = new BinWriter();
 
-			if(secs < 0 || secs > 0x3ffffffff) // secs negative or >34 bit
-				data.i32(nano).i64(secs);
-			else if(nano || secs > 0xffffffff) // has nanosecs or secs >32 bit
-				data.i32(nano*4 + (secs/0x100000000 & 3)).i32(secs);
-			else // no nanosecs, secs <=32 bit
-				data.i32(secs);
+			var iterated = [];
 
-			return data.data();
-		},
-		decode: function(str){
-			var o = new Date(),
-				data = new BinReader(str),
-				secs = 0, nano = 0;
+			function encode(o) {
+				var tp = typeof o;
+				if(tp in exts) {
+					for(var i=0,ext,buf;i<exts[tp].length;i++) {
+						ext = exts[tp][i];
+						buf = ext.enc(o);
+						if(buf === false) continue;
+						if(buf === undefined || buf === null)
+							throw new Error("MsgPack Error: Extension code "+ext.ty+" failed to return a valid buffer");
+						buf = normalizeString(buf);
 
-			switch(str.length) {
-				case 4: secs = data.ui32(); break;
-				case 8: nano = data.ui32(); secs = data.ui32() + (nano&3)*0x100000000; nano = floor(nano/4); break;
-				case 12: nano = data.ui32(); secs = data.i64(); break;
-				default:
-					throw new Error("MsgPack Error: Failed to decode Timestamp: Unknown timestamp encoding version with length "+str.length);
+						if(buf.length === 1) data.i8(0xd4);
+						else if(buf.length === 2) data.i8(0xd5);
+						else if(buf.length === 4) data.i8(0xd6);
+						else if(buf.length === 8) data.i8(0xd7);
+						else if(buf.length === 16) data.i8(0xd8);
+						else if(buf.length < 256) data.i8(0xc7).i8(buf.length);
+						else if(buf.length < 65536) data.i8(0xc8).i16(buf.length);
+						else data.i8(0xc9).i32(buf.length);
+
+						data.i8(ext.ty).buf(buf);
+
+						return;
+					}
+				}
+				if(tp === "bigint" && o <= 0xffffffff) {
+					o = Number(o); tp = "number";
+				}
+				if(o && o.constructor.name.match(/^(Big)?(Uint|Int|Float)(8|16|32|64)(Clamped)?Array$|^(ArrayBuffer|Buffer|DataView)$/)) {
+					// buffer
+					o = normalizeString(o);
+					if(o.length < 256)
+						data.i8(0xc4).i8(o.length).buf(o);
+					else if(o.length < 65536)
+						data.i8(0xc5).i16(o.length).buf(o);
+					else
+						data.i8(0xc6).i32(o.length).buf(o);
+				} else if(o === null || o === undefined) {
+					// nil
+					data.i8(0xc0);
+				} else if(tp === "boolean") {
+					// boolean
+					data.i8(0xc2 + o);
+				} else if(tp === "number") {
+					if(floor(o) === o) {
+						// int
+						if(o < 0) {
+							// negative
+							if(o >= -32)
+								data.i8(o);
+							else if(o >= -128)
+								data.i8(0xd0).i8(o);
+							else if(o >= -32768)
+								data.i8(0xd1).i16(o);
+							else if(o >= -0x80000000)
+								data.i8(0xd2).i32(o);
+							else
+								data.i8(0xd3).i64(o);
+						} else {
+							// positive
+							if(o < 128)
+								data.i8(o);
+							else if(o < 256)
+								data.i8(0xcc).i8(o);
+							else if(o < 65536)
+								data.i8(0xcd).i16(o);
+							else if(o <= 0xffffffff)
+								data.i8(0xce).i32(o);
+							else
+								data.i8(0xcf).i64(o);
+						}
+					} else {
+						// float
+						if(needsF64(o))
+							data.i8(0xcb).f64(o);
+						else
+							data.i8(0xca).f32(o);
+					}
+				} else if(tp === "bigint") {
+					data.i8(o < 0 ? 0xd3 : 0xcf);
+					data.i32(Number(o >> bis.bits)).i32(Number(o & bis.mask));
+				} else if(tp === "string") {
+					if(strenc === "utf8")
+						o = encodeUTF(o);
+					else
+						o = truncBufferString(o);
+					if(o.length < 32)
+						data.i8(0xa0 | o.length).buf(o);
+					else if(o.length < 256)
+						data.i8(0xd9).i8(o.length).buf(o);
+					else if(o.length < 65536)
+						data.i8(0xda).i16(o.length).buf(o);
+					else
+						data.i8(0xdb).i32(o.length).buf(o);
+				} else if(tp === "object") {
+					if(iterated.indexOf(o) > -1)
+						throw new Error("MsgPack Error: Failed to encode object with recursive properties");
+					iterated.push(o);
+					if(Array.isArray(o)) {
+						// array
+						if(o.length < 16)
+							data.i8(0x90 | o.length);
+						else if(o.length < 65536)
+							data.i8(0xdc).i16(o.length);
+						else
+							data.i8(0xdd).i32(o.length);
+						for(var i=0;i<o.length;i++)
+							encode(o[i]);
+					} else {
+						// map
+						var l = 0;
+						for(var i in o) {
+							if(o[i] === undefined) continue;
+							l++;
+						}
+						if(l < 16)
+							data.i8(0x80 | l);
+						else if(l < 65536)
+							data.i8(0xde).i16(l);
+						else
+							data.i8(0xdf).i32(l);
+
+						for(var i in o) {
+							if(o[i] === undefined) continue;
+							encode(i);
+							encode(o[i]);
+							if(--l < 0) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
+						}
+						if(l) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
+					}
+					iterated.pop();
+				} else throw new Error("MsgPack Error: Failed to encode element of type "+tp);
 			}
-			o.setTime(secs*1000 + nano/1000000); // this may lose precision, but js doesn't have much precision with Dates
+			encode(obj);
 
-			return o;
+			return toRequestedType(data.data(),rettype);
 		}
-	});
+
+		t.encode.defaults = function(settings) {
+			if(typeof settings === "string") {
+				if(settings in encDefaults)
+					return encDefaults[settings];
+				throw new Error("Unknown encode setting name: "+settings);
+			}
+
+			if(typeof settings !== "object")
+				throw new Error("Could not set encode defaults with non-object setting input");
+
+			if("returnType" in settings) {
+				if(typeof settings.returnType !== "string" || !(settings.returnType in dataTypes))
+					throw new Error("MsgPack Error: Invalid encode default value for returnType");
+				encDefaults.returnType = settings.returnType;
+			}
+			if("stringEncoding" in settings) {
+				if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
+					throw new Error("MsgPack Error: Invalid encode default value for stringEncoding");
+				encDefaults.stringEncoding = settings.stringEncoding;
+			}
+		}
+
+		var decDefaults = {
+			binaryType: "string",
+			stringEncoding: "utf8",
+			bigInts: false
+		};
+
+		t.decode = function(buf,settings) {
+			settings = settings || {};
+			// binaryType: "string" | "buffer" | "arraybuffer"
+			var bintype = "binaryType" in settings ? settings.binaryType.toLowerCase() : decDefaults.binaryType;
+			// stringEncoding: "utf8" | "latin1"
+			var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : decDefaults.stringEncoding;
+			// bigInts: boolean
+			var bigints = bigInts && ("bigInts" in settings ? !!settings.bigInts : decDefaults.bigInts);
+			var data = new BinReader(buf);
+
+			function decObj(n) {
+				var o = {};
+				for(var i=0;i<n;i++)
+					o[decode()] = decode();
+				return o;
+			}
+			function decArr(n) {
+				var o = [];
+				for(var i=0;i<n;i++)
+					o.push(decode());
+				return o;
+			}
+			function decBin(buf) {
+				return toRequestedType(buf,bintype);
+			}
+			function decStr(str) {
+				if(strenc === "utf8")
+					return decodeUTF(str);
+				return str;
+			}
+			function decExt(type,buf) {
+				if(!(type in extTypes)) {
+					console.warn("MsgPack Warning: Failed to decode unregistered extension type "+type);
+					return null;
+				}
+				return extTypes[type].dec(buf);
+			}
+			function decode() {
+				var b = data.ui8(), l;
+				if((b&0x80) === 0) return b; // +fixint
+				if((b&0xe0) === 0xe0) return b|(-1^255); // -fixint
+				if((b&0xf0) === 0x80) return decObj(b&15); // fixmap
+				if((b&0xf0) === 0x90) return decArr(b&15); // fixarray
+				if((b&0xe0) === 0xa0) return decStr(data.buf(b&31)); // fixstr
+				switch(b) {
+					case 0xc1: // ehh.. just map it to nil
+					case 0xc0: return null; // nil
+					case 0xc2: return false; // false
+					case 0xc3: return true; // true
+					case 0xc4: return decBin(data.buf(data.ui8())); // bin 8
+					case 0xc5: return decBin(data.buf(data.ui16())); // bin 16
+					case 0xc6: return decBin(data.buf(data.ui32())); // bin 32
+					case 0xc7: l = data.ui8(); return decExt(data.i8(),data.buf(l)); // ext 8
+					case 0xc8: l = data.ui16(); return decExt(data.i8(),data.buf(l)); // ext 16
+					case 0xc9: l = data.ui32(); return decExt(data.i8(),data.buf(l)); // ext 32
+					case 0xca: return data.f32(); // float 32
+					case 0xcb: return data.f64(); // float 64
+					case 0xcc: return data.ui8(); // uint 8
+					case 0xcd: return data.ui16(); // uint 16
+					case 0xce: return data.ui32(); // uint 32
+					case 0xcf: return data.ui64(bigints); // uint 64
+					case 0xd0: return data.i8(); // int 8
+					case 0xd1: return data.i16(); // int 16
+					case 0xd2: return data.i32(); // int 32
+					case 0xd3: return data.i64(bigints); // int 64
+					case 0xd4: return decExt(data.i8(),data.buf(1)); // fixext 1
+					case 0xd5: return decExt(data.i8(),data.buf(2)); // fixext 2
+					case 0xd6: return decExt(data.i8(),data.buf(4)); // fixext 4
+					case 0xd7: return decExt(data.i8(),data.buf(8)); // fixext 8
+					case 0xd8: return decExt(data.i8(),data.buf(16)); // fixext 16
+					case 0xd9: return decStr(data.buf(data.ui8())); // str 8
+					case 0xda: return decStr(data.buf(data.ui16())); // str 16
+					case 0xdb: return decStr(data.buf(data.ui32())); // str 32
+					case 0xdc: return decArr(data.ui16()); // array 16
+					case 0xdd: return decArr(data.ui32()); // array 32
+					case 0xde: return decObj(data.ui16()); // map 16
+					case 0xdf: return decObj(data.ui32()); // map 32
+				}
+				throw new Error("MsgPack Error: Somehow encountered unknown byte code: "+b);
+			}
+			var obj = decode();
+			if(!data.eof()) throw new Error("MsgPack Error: Trying to decode more data than expected");
+
+			return obj;
+		}
+
+		t.decode.defaults = function(settings) {
+			if(typeof settings === "string") {
+				if(settings in decDefaults)
+					return decDefaults[settings];
+				throw new Error("Unknown decode setting name: "+settings);
+			}
+
+			if(typeof settings !== "object")
+				throw new Error("Could not set decode defaults with non-object setting input");
+
+			if("binaryType" in settings) {
+				if(typeof settings.binaryType !== "string" || !(settings.binaryType in dataTypes))
+					throw new Error("MsgPack Error: Invalid decode default value for binaryType");
+				decDefaults.binaryType = settings.binaryType;
+			}
+			if("stringEncoding" in settings) {
+				if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
+					throw new Error("MsgPack Error: Invalid decode default value for stringEncoding");
+				decDefaults.stringEncoding = settings.stringEncoding;
+			}
+			if("bigInts" in settings) {
+				if(typeof settings.bigInts !== "boolean")
+					throw new Error("MsgPack Error: Non-boolean decode default value for bigInts");
+				decDefaults.bigInts = settings.bigInts;
+			}
+		}
+
+		coreExtend({
+			type: -1,
+			encode: function(o){
+				// permits cross-iframe Date instances
+				if(Object.prototype.toString.call(o) !== "[object Date]" || typeof o.getTime !== "function") return false;
+				var time = o.getTime();
+				if(typeof time !== "number") return false;
+
+				var secs = time / 1000 | 0,
+					nano = (time - secs*1000)*1000000;
+
+				var data = new BinWriter();
+
+				if(secs < 0 || secs > 0x3ffffffff) // secs negative or >34 bit
+					data.i32(nano).i64(secs);
+				else if(nano || secs > 0xffffffff) // has nanosecs or secs >32 bit
+					data.i32(nano*4 + (secs/0x100000000 & 3)).i32(secs);
+				else // no nanosecs, secs <=32 bit
+					data.i32(secs);
+
+				return data.data();
+			},
+			decode: function(str){
+				var o = new Date(),
+					data = new BinReader(str),
+					secs = 0, nano = 0;
+
+				switch(str.length) {
+					case 4: secs = data.ui32(); break;
+					case 8: nano = data.ui32(); secs = data.ui32() + (nano&3)*0x100000000; nano = floor(nano/4); break;
+					case 12: nano = data.ui32(); secs = data.i64(); break;
+					default:
+						throw new Error("MsgPack Error: Failed to decode Timestamp: Unknown timestamp encoding version with length "+str.length);
+				}
+				o.setTime(secs*1000 + nano/1000000); // this may lose precision, but js doesn't have much precision with Dates
+
+				return o;
+			}
+		});
+
+		if(typeof encodeDefs==="object")
+			t.encode.defaults(encodeDefs);
+		if(typeof decodeDefs==="object")
+			t.decode.defaults(decodeDefs);
+	}
+
+	var defInst = new msgpack();
+	msgpack.extend = defInst.extend;
+	msgpack.encode = defInst.encode;
+	msgpack.decode = defInst.decode;
 
 	if(typeof module === "object" && typeof module.exports === "object")
-		module.exports = t;
+		module.exports = msgpack;
 	else
-		window.msgpack = t;
+		window.msgpack = msgpack;
 })(typeof window!=="undefined" ? window : this);

@@ -20,11 +20,27 @@ var obj = {
   bigint: 31415926535897932384n, // large enough BigInts will be encoded as 64bit ints
 };
 
+// use msgpack directly:
+
 var encoded = msgpack.encode(obj);
 
 var decoded = msgpack.decode(encoded);
 
 console.log(decoded);
+
+// or create msgpack instances:
+
+var myMsgPack = new msgpack(
+  {returnType: "arraybuffer"},
+  {binaryType: "arraybuffer"}
+);
+
+encoded = myMsgPack.encode(obj);
+
+decoded = myMsgPack.decode(obj);
+
+console.log(decoded);
+
 </script>
 ```
 
@@ -43,14 +59,43 @@ var obj = {
   bigint: 31415926535897932384n, // large enough BigInts will be encoded as 64bit ints
 };
 
+// use msgpack directly:
+
 var encoded = msgpack.encode(obj);
 
 var decoded = msgpack.decode(encoded);
 
 console.log(decoded);
+
+// or create msgpack instances:
+
+var myMsgPack = new msgpack(
+  {returnType: "arraybuffer"},
+  {binaryType: "arraybuffer"}
+);
+
+encoded = myMsgPack.encode(obj);
+
+decoded = myMsgPack.decode(obj);
+
+console.log(decoded);
 ```
 
 ## General Reference:
+
+### new msgpack(encodeDefaults, decodeDefaults)
+
+The msgpack constructor. Creates a new msgpack encoder / decoder instance with its own extensions and default settings. You may also use msgpack without instantiating it: The functions described below (`msgpack.encode`, `msgpack.decode`, `msgpack.extend`, etc.) are both msgpack instance methods as well as static properties on the msgpack constructor function.
+
+#### `encodeDefaults?: object`
+
+Optional. Default encode settings for the new msgpack instance. If used, this value is passed directly to `msgpack.encode.defaults(...)`. See `msgpack.encode.defaults(...)` and the `msgpack.encode(...)` `settings` parameter for more details.
+
+#### `decodeDefaults?: object`
+
+Optional. Default decode settings for the new msgpack instance. If used, this value is passed directly to `msgpack.decode.defaults(...)`. See `msgpack.decode.defaults(...)` and the `msgpack.decode(...)` `settings` parameter for more details.
+
+----------------------------------------------------------------
 
 ### msgpack.encode(data, settings = {})
 
