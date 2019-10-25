@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.3.0
+/// version 1.3.1
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -531,7 +531,7 @@
 				if((b&0xf0) === 0x90) return decArr(b&15); // fixarray
 				if((b&0xe0) === 0xa0) return decStr(data.buf(b&31)); // fixstr
 				switch(b) {
-					case 0xc1: // ehh.. just map it to nil
+					case 0xc1: throw new Error("MsgPack Error: Encountered reserved type 0xc1");
 					case 0xc0: return null; // nil
 					case 0xc2: return false; // false
 					case 0xc3: return true; // true
