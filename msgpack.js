@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.3.1
+/// version 1.3.2
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -80,6 +80,9 @@
 		f64_dnm2 = pow(2,52);
 
 	function needsF64(n) {
+		if(n === -Infinity || n === Infinity || isNaN(n))
+			return false;
+
 		n = abs(n);
 		var lg = log2(n);
 		if(lg < -120 || lg > 120) return true;
@@ -307,7 +310,8 @@
 
 		var encDefaults = {
 			returnType: "string",
-			stringEncoding: "utf8"
+			stringEncoding: "utf8",
+			useDoubles: true
 		};
 
 		t.encode = function(obj,settings) {
@@ -316,6 +320,9 @@
 			var rettype = "returnType" in settings ? settings.returnType.toLowerCase() : encDefaults.returnType;
 			// stringEncoding: "utf8" | "latin1"
 			var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : encDefaults.stringEncoding;
+			// useDoubles: boolean
+			var doubles = "useDoubles" in settings ? !!settings.useDoubles : encDefaults.useDoubles;
+
 			var data = new BinWriter();
 
 			var iterated = [];
@@ -364,7 +371,13 @@
 					// boolean
 					data.i8(0xc2 + o);
 				} else if(tp === "number") {
-					if(floor(o) === o) {
+					if(o === -Infinity || o === Infinity || isNaN(o) || floor(o) !== o) {
+						// float
+						if(doubles && needsF64(o))
+							data.i8(0xcb).f64(o);
+						else
+							data.i8(0xca).f32(o);
+					} else {
 						// int
 						if(o < 0) {
 							// negative
@@ -391,12 +404,6 @@
 							else
 								data.i8(0xcf).i64(o);
 						}
-					} else {
-						// float
-						if(needsF64(o))
-							data.i8(0xcb).f64(o);
-						else
-							data.i8(0xca).f32(o);
 					}
 				} else if(tp === "bigint") {
 					data.i8(o < 0 ? 0xd3 : 0xcf);
@@ -478,6 +485,11 @@
 					throw new Error("MsgPack Error: Invalid encode default value for stringEncoding");
 				encDefaults.stringEncoding = settings.stringEncoding;
 			}
+			if("useDoubles" in settings) {
+				if(typeof settings.useDoubles !== "boolean")
+					throw new Error("MsgPack Error: Invalid encode default value for useDoubles");
+				encDefaults.useDoubles = settings.useDoubles;
+			}
 		}
 
 		var decDefaults = {
@@ -494,6 +506,7 @@
 			var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : decDefaults.stringEncoding;
 			// bigInts: boolean
 			var bigints = bigInts && ("bigInts" in settings ? !!settings.bigInts : decDefaults.bigInts);
+
 			var data = new BinReader(buf);
 
 			function decObj(n) {
@@ -639,9 +652,9 @@
 			}
 		});
 
-		if(typeof encodeDefs==="object")
+		if(encodeDefs && typeof encodeDefs==="object")
 			t.encode.defaults(encodeDefs);
-		if(typeof decodeDefs==="object")
+		if(decodeDefs && typeof decodeDefs==="object")
 			t.decode.defaults(decodeDefs);
 	}
 

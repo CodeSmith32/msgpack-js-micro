@@ -87,13 +87,15 @@ console.log(decoded);
 
 The msgpack constructor. Creates a new msgpack encoder / decoder instance with its own extensions and default settings. You may also use msgpack without instantiating it: The functions described below (`msgpack.encode`, `msgpack.decode`, `msgpack.extend`, etc.) are both msgpack instance methods as well as static properties on the msgpack constructor function.
 
-#### `encodeDefaults?: object`
+#### `encodeDefaults?: object | null`
 
-Optional. Default encode settings for the new msgpack instance. If used, this value is passed directly to `msgpack.encode.defaults(...)`. See `msgpack.encode.defaults(...)` and the `msgpack.encode(...)` `settings` parameter for more details.
+Optional. Default encode settings for the new msgpack instance. If this value is a non-null object, it is passed directly to `msgpack.encode.defaults(...)`. See `msgpack.encode.defaults(...)` and the `msgpack.encode(...)` `settings` parameter for more details.
 
-#### `decodeDefaults?: object`
+#### `decodeDefaults?: object | null`
 
-Optional. Default decode settings for the new msgpack instance. If used, this value is passed directly to `msgpack.decode.defaults(...)`. See `msgpack.decode.defaults(...)` and the `msgpack.decode(...)` `settings` parameter for more details.
+Optional. Default decode settings for the new msgpack instance. If this value is a non-null object, it is passed directly to `msgpack.decode.defaults(...)`. See `msgpack.decode.defaults(...)` and the `msgpack.decode(...)` `settings` parameter for more details.
+
+Notice, both arguments are optional. However, to only provide a value for `decodeDefaults` and no value for `encodeDefaults`, pass `null` for `encodeDefaults` and then an object for `decodeDefaults`. For instance: `new msgpack(null, {bigInts:true})`.
 
 ----------------------------------------------------------------
 
@@ -141,6 +143,12 @@ Specifies how Javascript strings should be encoded.
 - `"latin1"` strings will be considered as char-buffers; for unicode characters, bits beyond the first 8 will be truncated
 
 Default: `"utf8"`
+
+**`settings.useDoubles?: boolean`**
+
+If numbers should be encoded as doubles when necessary to maintain best precision. When `true`, each decimal number will be encoded as a 32-bit float if a float can accurately hold its precision, and as a double if a float cannot. When `false`, only floats are used, thus truncating some precision on some decimal numbers. If the data being packed contains many decimal numbers that do not need precision beyond floating point range (i.e., some coordinate data), turning this setting on may help reduce data size.
+
+Default: `true`
 
 #### Return: `string | Buffer | ArrayBuffer`
 Returns a buffer of data encoding the input object structure in the msgpack format. The type of this data will be the type selected by the `returnType` setting (which defaults to `string`).
@@ -206,11 +214,16 @@ The datatype in which to return the msgpack encoded data. See `msgpack.encode(..
 
 Specifies how Javascript strings should be encoded. See `msgpack.encode(...)` for encode setting details.
 
+**`params.useDoubles?: boolean`**
+
+Indicates if doubles should be used to encode numbers when necessary. Defaults to `true`. See `msgpack.encode(...)` for encode setting details.
+
 #### Return: `any | void`
 If a string is provided as the parameter, the value returned is the default value for the setting by that name. Specifically:
 
 - Passing `"returnType"` returns a string
 - Passing `"stringEncoding"` returns a string
+- Passing `"useDoubles"` returns a boolean
 
 If an object is provided as the parameter to assign defaults, `undefined` is returned.
 
