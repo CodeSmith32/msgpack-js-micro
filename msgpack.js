@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.3.2
+/// version 1.3.3
 /// by Codesmith32
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
@@ -667,4 +667,4 @@
 		module.exports = msgpack;
 	else
 		window.msgpack = msgpack;
-})(typeof window!=="undefined" ? window : this);
+})(typeof window!=="undefined" ? window : typeof global!=="undefined" ? global : this);
