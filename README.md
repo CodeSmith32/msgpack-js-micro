@@ -3,8 +3,6 @@ msgpack - A fast, lightweight, and extremely compatible JS implementation of the
 
 This is a simple, small, and very portable Javascript implementation of msgpack. Runs on browsers (back as far as IE5) as well as Node.js.
 
-Notice: This implementation is still fairly new, and may have bugs. If you find any bugs, please report them immediately, and I will try to get them fixed as soon as possible.
-
 **Browser:**
 
 ```
