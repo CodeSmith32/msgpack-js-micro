@@ -299,6 +299,3 @@ When the extension's type is found in the packed data, this callback will be cal
 The `msgpack.extend()` function returns `undefined`.
 
 ----------------------------------------------------------------
-
-## TODO:
-- Thoroughly test

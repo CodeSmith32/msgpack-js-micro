@@ -1,6 +1,7 @@
 /// micro msgpack library
 /// version 1.3.3
 /// by Codesmith32
+/// license: MIT / https://mit-license.org
 /// https://github.com/CodeSmith32/msgpack-js-micro
 
 (function(window){
