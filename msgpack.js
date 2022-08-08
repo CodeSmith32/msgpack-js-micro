@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.3.3
+/// version 1.3.4
 /// by Codesmith32
 /// license: MIT / https://mit-license.org
 /// https://github.com/CodeSmith32/msgpack-js-micro
@@ -356,7 +356,7 @@
 				if(tp === "bigint" && o <= 0xffffffff) {
 					o = Number(o); tp = "number";
 				}
-				if(o && o.constructor.name.match(/^(Big)?(Uint|Int|Float)(8|16|32|64)(Clamped)?Array$|^(ArrayBuffer|Buffer|DataView)$/)) {
+				if(o && typeof o.constructor === 'function' && o.constructor.name.match(/^(Big)?(Uint|Int|Float)(8|16|32|64)(Clamped)?Array$|^(ArrayBuffer|Buffer|DataView)$/)) {
 					// buffer
 					o = normalizeString(o);
 					if(o.length < 256)
