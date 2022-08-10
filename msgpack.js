@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.3.5
+/// version 1.3.6
 /// by Codesmith32
 /// license: MIT / https://mit-license.org
 /// https://github.com/CodeSmith32/msgpack-js-micro
@@ -22,6 +22,8 @@
 		f64bytes = typedArrays && new window.Uint8Array(8),
 		f64num = typedArrays && new window.Float64Array(f64bytes.buffer),
 		littleEndian = typedArrays && (new Uint32Array(new Uint8Array([1,0,0,0]).buffer)[0] === 1),
+		hasOwn = Object.prototype.hasOwnProperty,
+		iskey = function(k,o) {return hasOwn.call(o,k)},
 		defProp = Object.defineProperty ? Object.defineProperty.bind(Object) : function(o,p,d) {o[p] = d.value};
 
 	// polyfills: supports back to IE5
@@ -268,7 +270,7 @@
 	function msgpack(encodeDefs,decodeDefs) {
 		var t=this; if(!(t instanceof msgpack)) throw new Error("Bad instantiation of object msgpack");
 
-		var exts = {}, extTypes = {};
+		var exts = Object.create(null), extTypes = Object.create(null);
 		t.extend = function(params/* {type:int, encode:(obj:*)=>string|false, decode:(data:string)=>obj:*} */) {
 			var type = params.type,
 				tpof = params.varType || 'object',
@@ -286,7 +288,7 @@
 			if(typeof encode !== "function") throw new Error("MsgPack Error: Failed to add extension; missing 'encode' function");
 			if(typeof decode !== "function") throw new Error("MsgPack Error: Failed to add extension; missing 'decode' function");
 
-			if(type in extTypes) throw new Error("MsgPack Error: Failed to register extension with code "+type+"; extension code already in use");
+			if(iskey(type,extTypes)) throw new Error("MsgPack Error: Failed to register extension with code "+type+"; extension code already in use");
 
 			(exts[tpof] = exts[tpof] || []).push(ext);
 			extTypes[type] = ext;
@@ -319,11 +321,11 @@
 		t.encode = function(obj,settings) {
 			settings = settings || {};
 			// returnType: "string" | "buffer" | "arraybuffer"
-			var rettype = "returnType" in settings ? settings.returnType.toLowerCase() : encDefaults.returnType;
+			var rettype = iskey("returnType",settings) ? settings.returnType.toLowerCase() : encDefaults.returnType;
 			// stringEncoding: "utf8" | "latin1"
-			var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : encDefaults.stringEncoding;
+			var strenc = iskey("stringEncoding",settings) ? settings.stringEncoding.toLowerCase() : encDefaults.stringEncoding;
 			// useDoubles: boolean
-			var doubles = "useDoubles" in settings ? !!settings.useDoubles : encDefaults.useDoubles;
+			var doubles = iskey("useDoubles",settings) ? !!settings.useDoubles : encDefaults.useDoubles;
 
 			var data = new BinWriter();
 
@@ -331,7 +333,7 @@
 
 			function encode(o) {
 				var tp = typeof o;
-				if(tp in exts) {
+				if(iskey(tp,exts)) {
 					for(var i=0,ext,buf;i<exts[tp].length;i++) {
 						ext = exts[tp][i];
 						buf = ext.enc(o);
@@ -441,7 +443,7 @@
 						// map
 						var l = 0;
 						for(var i in o) {
-							if(o[i] === undefined) continue;
+							if(!iskey(i,o) || o[i] === undefined) continue;
 							l++;
 						}
 						if(l < 16)
@@ -452,7 +454,7 @@
 							data.i8(0xdf).i32(l);
 
 						for(var i in o) {
-							if(o[i] === undefined) continue;
+							if(!iskey(i,o) || o[i] === undefined) continue;
 							encode(i);
 							encode(o[i]);
 							if(--l < 0) throw new Error("MsgPack Error: Failed to encode malformed Proxy object");
@@ -469,7 +471,7 @@
 
 		t.encode.defaults = function(settings) {
 			if(typeof settings === "string") {
-				if(settings in encDefaults)
+				if(iskey(settings,encDefaults))
 					return encDefaults[settings];
 				throw new Error("Unknown encode setting name: "+settings);
 			}
@@ -477,17 +479,17 @@
 			if(typeof settings !== "object")
 				throw new Error("Could not set encode defaults with non-object setting input");
 
-			if("returnType" in settings) {
-				if(typeof settings.returnType !== "string" || !(settings.returnType in dataTypes))
+			if(iskey("returnType",settings)) {
+				if(typeof settings.returnType !== "string" || !iskey(settings.returnType,dataTypes))
 					throw new Error("MsgPack Error: Invalid encode default value for returnType");
 				encDefaults.returnType = settings.returnType;
 			}
-			if("stringEncoding" in settings) {
-				if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
+			if(iskey("stringEncoding",settings)) {
+				if(typeof settings.stringEncoding !== "string" || !iskey(settings.stringEncoding,encodeTypes))
 					throw new Error("MsgPack Error: Invalid encode default value for stringEncoding");
 				encDefaults.stringEncoding = settings.stringEncoding;
 			}
-			if("useDoubles" in settings) {
+			if(iskey("useDoubles",settings)) {
 				if(typeof settings.useDoubles !== "boolean")
 					throw new Error("MsgPack Error: Invalid encode default value for useDoubles");
 				encDefaults.useDoubles = settings.useDoubles;
@@ -503,22 +505,22 @@
 		t.decode = function(buf,settings) {
 			settings = settings || {};
 			// binaryType: "string" | "buffer" | "arraybuffer"
-			var bintype = "binaryType" in settings ? settings.binaryType.toLowerCase() : decDefaults.binaryType;
+			var bintype = iskey("binaryType",settings) ? settings.binaryType.toLowerCase() : decDefaults.binaryType;
 			// stringEncoding: "utf8" | "latin1"
-			var strenc = "stringEncoding" in settings ? settings.stringEncoding.toLowerCase() : decDefaults.stringEncoding;
+			var strenc = iskey("stringEncoding",settings) ? settings.stringEncoding.toLowerCase() : decDefaults.stringEncoding;
 			// bigInts: boolean
-			var bigints = bigInts && ("bigInts" in settings ? !!settings.bigInts : decDefaults.bigInts);
+			var bigints = bigInts && (iskey("bigInts",settings) ? !!settings.bigInts : decDefaults.bigInts);
 
 			var data = new BinReader(buf);
 
 			function decObj(n) {
 				var o = {};
 				for(var i=0;i<n;i++) {
-					var n = decode(), v = decode();
-					if(n === '__proto__')
-						defProp(o, n, {enumerable:true,configurable:true,writable:true,value:v});
+					var p = decode(), v = decode();
+					if(p === '__proto__')
+						defProp(o, p, {enumerable:true,configurable:true,writable:true,value:v});
 					else
-						o[n] = v;
+						o[p] = v;
 				}
 				return o;
 			}
@@ -537,7 +539,7 @@
 				return str;
 			}
 			function decExt(type,buf) {
-				if(!(type in extTypes)) {
+				if(!iskey(type,extTypes)) {
 					console.warn("MsgPack Warning: Failed to decode unregistered extension type "+type);
 					return null;
 				}
@@ -594,7 +596,7 @@
 
 		t.decode.defaults = function(settings) {
 			if(typeof settings === "string") {
-				if(settings in decDefaults)
+				if(iskey(settings,decDefaults))
 					return decDefaults[settings];
 				throw new Error("Unknown decode setting name: "+settings);
 			}
@@ -602,17 +604,17 @@
 			if(typeof settings !== "object")
 				throw new Error("Could not set decode defaults with non-object setting input");
 
-			if("binaryType" in settings) {
-				if(typeof settings.binaryType !== "string" || !(settings.binaryType in dataTypes))
+			if(iskey("binaryType",settings)) {
+				if(typeof settings.binaryType !== "string" || !iskey(settings.binaryType,dataTypes))
 					throw new Error("MsgPack Error: Invalid decode default value for binaryType");
 				decDefaults.binaryType = settings.binaryType;
 			}
-			if("stringEncoding" in settings) {
-				if(typeof settings.stringEncoding !== "string" || !(settings.stringEncoding in encodeTypes))
+			if(iskey("stringEncoding",settings)) {
+				if(typeof settings.stringEncoding !== "string" || !iskey(settings.stringEncoding,encodeTypes))
 					throw new Error("MsgPack Error: Invalid decode default value for stringEncoding");
 				decDefaults.stringEncoding = settings.stringEncoding;
 			}
-			if("bigInts" in settings) {
+			if(iskey("bigInts",settings)) {
 				if(typeof settings.bigInts !== "boolean")
 					throw new Error("MsgPack Error: Non-boolean decode default value for bigInts");
 				decDefaults.bigInts = settings.bigInts;
