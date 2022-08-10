@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.3.4
+/// version 1.3.5
 /// by Codesmith32
 /// license: MIT / https://mit-license.org
 /// https://github.com/CodeSmith32/msgpack-js-micro
@@ -21,7 +21,8 @@
 		f32num = typedArrays && new window.Float32Array(f32bytes.buffer),
 		f64bytes = typedArrays && new window.Uint8Array(8),
 		f64num = typedArrays && new window.Float64Array(f64bytes.buffer),
-		littleEndian = typedArrays && (new Uint32Array(new Uint8Array([1,0,0,0]).buffer)[0] === 1);
+		littleEndian = typedArrays && (new Uint32Array(new Uint8Array([1,0,0,0]).buffer)[0] === 1),
+		defProp = Object.defineProperty ? Object.defineProperty.bind(Object) : function(o,p,d) {o[p] = d.value};
 
 	// polyfills: supports back to IE5
 	try{"name" in Function.prototype||(Object.defineProperty(Function.prototype,"name",{get:function(){return this.toString().match(/function\s*([^\s(]*)/)[1]}}))}catch(e){Function.prototype.name=""}
@@ -512,8 +513,13 @@
 
 			function decObj(n) {
 				var o = {};
-				for(var i=0;i<n;i++)
-					o[decode()] = decode();
+				for(var i=0;i<n;i++) {
+					var n = decode(), v = decode();
+					if(n === '__proto__')
+						defProp(o, n, {enumerable:true,configurable:true,writable:true,value:v});
+					else
+						o[n] = v;
+				}
 				return o;
 			}
 			function decArr(n) {
