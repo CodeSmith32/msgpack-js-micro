@@ -1,5 +1,5 @@
 /// micro msgpack library
-/// version 1.3.6
+/// version 1.3.7
 /// by Codesmith32
 /// license: MIT / https://mit-license.org
 /// https://github.com/CodeSmith32/msgpack-js-micro
@@ -24,7 +24,14 @@
 		littleEndian = typedArrays && (new Uint32Array(new Uint8Array([1,0,0,0]).buffer)[0] === 1),
 		hasOwn = Object.prototype.hasOwnProperty,
 		iskey = function(k,o) {return hasOwn.call(o,k)},
-		defProp = Object.defineProperty ? Object.defineProperty.bind(Object) : function(o,p,d) {o[p] = d.value};
+		defProp = (function(){
+			try {
+				return Object.defineProperty.bind(Object);
+			} catch(e) {
+				return function(o,p,d) {o[p] = d.value}
+			}
+		})(),
+		nullObj = Object.create ? function(){return Object.create(null)} : function(){return {}};
 
 	// polyfills: supports back to IE5
 	try{"name" in Function.prototype||(Object.defineProperty(Function.prototype,"name",{get:function(){return this.toString().match(/function\s*([^\s(]*)/)[1]}}))}catch(e){Function.prototype.name=""}
@@ -270,7 +277,7 @@
 	function msgpack(encodeDefs,decodeDefs) {
 		var t=this; if(!(t instanceof msgpack)) throw new Error("Bad instantiation of object msgpack");
 
-		var exts = Object.create(null), extTypes = Object.create(null);
+		var exts = nullObj(), extTypes = nullObj();
 		t.extend = function(params/* {type:int, encode:(obj:*)=>string|false, decode:(data:string)=>obj:*} */) {
 			var type = params.type,
 				tpof = params.varType || 'object',
